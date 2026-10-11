@@ -1,3 +1,7 @@
+/*
+  使っていない。歌なしは karaoke.ts。
+  ここを再生経路に戻すと、MediaElementSource が同じ要素に二度付く。
+*/
 const LOW = 150;
 const HIGH = 6500;
 
@@ -20,7 +24,6 @@ export type VocalSplit = {
   close: () => void;
 };
 
-/** Center-cancel the vocal, keep the band edges. `vocals` true is the dry mix. */
 export function splitVocals(audio: HTMLAudioElement, vocals: boolean): VocalSplit {
   const ctx = new AudioContext({ latencyHint: "interactive" });
   const source = ctx.createMediaElementSource(audio);

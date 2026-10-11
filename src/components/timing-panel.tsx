@@ -1,3 +1,7 @@
+/*
+  今の行の頭だけを動かす。行の中の速度は持たない。
+  保存の通信は親。ロック中の行は早める・遅らせるを出さない。
+*/
 import { useEffect, useRef, type PointerEvent as ReactPointerEvent, type RefObject } from "react";
 import { CUES } from "@/data/score";
 

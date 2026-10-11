@@ -3,6 +3,10 @@
 @import "@fontsource/shippori-mincho/japanese-700.css";
 @import "@fontsource/zen-kaku-gothic-new/japanese-400.css";
 
+/*
+  夜の見た目。白塗りは --p、シークは --pct。歌詞の進行を JS の色で塗らない。
+*/
+
 @theme {
   --color-bg: #07060a;
   --color-fg: #f3e6d8;
@@ -1116,5 +1120,83 @@
 }
 .text-btn:disabled {
   color: var(--color-muted);
+}
+
+.gate-links {
+  margin: 1.15rem 0 0;
+}
+
+.terms-link {
+  color: var(--color-muted);
+  letter-spacing: 0.22em;
+  font-size: 0.72rem;
+  text-decoration: none;
+}
+
+.terms-link:hover {
+  color: var(--color-gold);
+}
+
+.terms-page {
+  display: flex;
+  flex-direction: column;
+  gap: 1.35rem;
+  max-width: 36rem;
+  min-height: 100dvh;
+  margin: 0 auto;
+  padding: max(3rem, env(safe-area-inset-top)) 1.4rem max(4.5rem, env(safe-area-inset-bottom));
+}
+
+.terms-page h1,
+.terms-page h2,
+.terms-close {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 700;
+}
+
+.terms-page h1 {
+  letter-spacing: 0.22em;
+  font-size: clamp(1.8rem, 6vw, 2.6rem);
+}
+
+.terms-page h2 {
+  margin-bottom: 0.4rem;
+  color: var(--color-gold);
+  letter-spacing: 0.18em;
+  font-size: 0.95rem;
+}
+
+.terms-kicker,
+.terms-en {
+  margin: 0;
+  color: var(--color-muted);
+  letter-spacing: 0.22em;
+  font-size: 0.75rem;
+}
+
+.terms-page p {
+  margin: 0;
+  color: var(--color-fg);
+  font-size: 0.95rem;
+  line-height: 1.85;
+  text-wrap: pretty;
+}
+
+.terms-close {
+  color: var(--color-gold);
+  letter-spacing: 0.06em;
+  line-height: 1.7;
+}
+
+.terms-back {
+  align-self: center;
+  color: var(--color-fg);
+  letter-spacing: 0.22em;
+  text-decoration: none;
+}
+
+.terms-back:hover {
+  color: var(--color-gold);
 }
 

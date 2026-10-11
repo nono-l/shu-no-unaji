@@ -1,3 +1,7 @@
+/*
+  歌を中央キャンセルする。低域と高域は残す。
+  MediaElementSource は要素につき一度。同じ audio に二度作ると音が死ぬ。切替は親が要素を作り直す。
+*/
 const LOW = 150;
 const HIGH = 6500;
 const STAGES = 3;
@@ -28,7 +32,6 @@ function chain(
   return node;
 }
 
-/** Center-cancel the vocal, keeping the low and high bands of the mix. */
 export function createVocalGraph(audio: HTMLMediaElement, vocals: boolean): VocalGraph {
   const context = new AudioContext({ latencyHint: "interactive" });
   const source = context.createMediaElementSource(audio);

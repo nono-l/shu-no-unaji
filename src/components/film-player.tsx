@@ -1,3 +1,8 @@
+/*
+  夜の一曲。時計は audio の currentTime。場面は生の時刻、歌詞は行のずれを引いた時刻。
+  白塗りは行全体を一本。行の中を範囲に割らない。塗るたびに再描画しない。--p を書く。
+  ずれは lyric_lines。localStorage は届かなかったときの控え。届いたことにしない。
+*/
 import { useEffect, useRef, useState } from "react";
 import {
   Check,
@@ -983,6 +988,11 @@ export function FilmPlayer() {
             <Play aria-hidden="true" size={18} strokeWidth={1.5} />
             <span>{resumeAt != null ? "続きから" : karaoke ? "歌なしで再生" : "再生"}</span>
           </button>
+          <p className="gate-links">
+            <a href="/terms" className="terms-link">
+              配信規約
+            </a>
+          </p>
         </div>
       ) : null}
 
@@ -995,6 +1005,11 @@ export function FilmPlayer() {
             <RotateCcw aria-hidden="true" size={18} strokeWidth={1.5} />
             <span>もう一度</span>
           </button>
+          <p className="gate-links">
+            <a href="/terms" className="terms-link">
+              配信規約
+            </a>
+          </p>
         </div>
       ) : null}
 

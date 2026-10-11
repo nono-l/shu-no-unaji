@@ -1,3 +1,7 @@
+/*
+  行ごとのずれとロック。所有者はいない。誰の行も同じ表。
+  認証を足して行を人に紐づけない。白塗りの速度はここには無い。
+*/
 import { createServerFn } from "@tanstack/react-start";
 import { getSql } from "@/lib/db";
 

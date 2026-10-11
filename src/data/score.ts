@@ -1,3 +1,7 @@
+/*
+  長さ、場面、歌詞、聞こえる時刻。描画も保存も持たない。
+  正のずれは行が早い。cue.t から引く。場面の時刻には足さない。
+*/
 export const DURATION = 227.33;
 
 export type Ken = "in" | "out" | "left" | "right" | "up";
@@ -142,7 +146,7 @@ export function sceneIndexAt(t: number): number {
   return i;
 }
 
-/** When this line is heard, after its saved offset. Positive offset means the line is early. */
+/** 正のずれは行が早い。場面の時刻には使わない。 */
 export function cueHeardAt(index: number, offsets: number[]): number {
   const cue = CUES[index];
   if (!cue) return 0;

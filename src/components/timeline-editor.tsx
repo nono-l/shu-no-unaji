@@ -1,3 +1,7 @@
+/*
+  波形の上で行の頭を掴む。離した位置は clampOffset だけを通す。別の丸めをしない。
+  ロック中の行は動かさない。
+*/
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type RefObject } from "react";
 import { Pause, Play } from "lucide-react";
 import { CUES, DURATION, cueHeardAt, clampOffset } from "@/data/score";
