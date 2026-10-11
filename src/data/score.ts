@@ -166,6 +166,27 @@ export function cueIndexAt(t: number, offsets: number[]): number {
   return index;
 }
 
+/**
+ * 仮の白塗りの窓。行が聞こえてから次の行まで。最短 0.4 秒。
+ * 次が近すぎるか、最後の行なら 3.2 秒。範囲の速度はここでは足さない。
+ */
+export function lyricWipeSpan(index: number, offsets: number[]): { start: number; span: number } {
+  const cue = CUES[index];
+  if (!cue) return { start: 0, span: 0.4 };
+  const start = cue.t - (offsets[index] ?? 0);
+  const next = CUES[index + 1];
+  const end = next ? next.t - (offsets[index + 1] ?? 0) : start + 3.2;
+  const span = Math.max(0.4, (end > start + 0.05 ? end : start + 3.2) - start);
+  return { start, span };
+}
+
+/** 範囲が無いときの進み。式は lyricWipeSpan だけ。 */
+export function lyricWipeAt(index: number, time: number, offsets: number[]): number {
+  if (!CUES[index]) return 1;
+  const { start, span } = lyricWipeSpan(index, offsets);
+  return Math.min(1, Math.max(0, (time - start) / span));
+}
+
 export function sectionBounds(index: number): { from: number; to: number } {
   const at = Math.min(CUES.length - 1, Math.max(0, index));
   const name = CUES[at].section;

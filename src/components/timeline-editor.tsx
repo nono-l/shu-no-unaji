@@ -1,17 +1,20 @@
 /*
   波形の上で行の頭を掴む。離した位置は clampOffset だけを通す。別の丸めをしない。
   ロック中の行は動かさない。
+  波形は見える範囲だけ、音のサンプルから描く。粗い棒に潰すと、寄せても山が分からない。
 */
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type RefObject } from "react";
 import { Pause, Play } from "lucide-react";
 import { CUES, DURATION, cueHeardAt, clampOffset } from "@/data/score";
+import { SpeedPick, WhenLine, offsetDigits } from "@/components/film-speed";
 
 const PAD = 28;
-const ZOOMS = [14, 24, 40, 64];
+const ZOOMS = [14, 24, 40, 64, 120, 220, 480, 960, 1600];
 
 type Props = {
   offsets: number[];
   locks: boolean[];
+  adjusted: number[];
   cueIndex: number;
   playing: boolean;
   audioRef: RefObject<HTMLAudioElement | null>;
@@ -22,24 +25,30 @@ type Props = {
   onToggleLock: (index: number) => void;
   onTogglePlay: () => void;
   onClose: () => void;
+  rate: number;
+  onRate: (rate: number) => void;
 };
 
-function fmt(t: number): string {
+function fmt(t: number, fine = false): string {
   const safe = Number.isFinite(t) ? Math.max(0, t) : 0;
-  return `${Math.floor(safe / 60)}:${Math.floor(safe % 60).toString().padStart(2, "0")}`;
+  const head = `${Math.floor(safe / 60)}:`;
+  const sec = safe % 60;
+  if (!fine) return head + Math.floor(sec).toString().padStart(2, "0");
+  return head + sec.toFixed(1).padStart(4, "0");
 }
 
 function phrase(offset: number, active: boolean, locked: boolean): string {
   if (!active) return "行を選ぶと、その行だけずれます";
   if (locked) return "この行はロックしています";
-  if (Math.abs(offset) < 0.05) return "この行は音と揃っている";
-  if (offset > 0) return `この行が ${offset.toFixed(1)}秒 早い`;
-  return `この行が ${Math.abs(offset).toFixed(1)}秒 遅い`;
+  if (Math.abs(offset) < 0.005) return "この行は音と揃っている";
+  if (offset > 0) return `この行が ${offsetDigits(offset)}秒 早い`;
+  return `この行が ${offsetDigits(offset)}秒 遅い`;
 }
 
 export function TimelineEditor({
   offsets,
   locks,
+  adjusted,
   cueIndex,
   playing,
   audioRef,
@@ -50,12 +59,16 @@ export function TimelineEditor({
   onToggleLock,
   onTogglePlay,
   onClose,
+  rate,
+  onRate,
 }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const playheadRef = useRef<HTMLDivElement>(null);
   const clockRef = useRef<HTMLSpanElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const zoomRef = useRef(ZOOMS[1]);
+  const samplesRef = useRef<Float32Array | null>(null);
+  const rateRef = useRef(48000);
   const followRef = useRef(true);
   const followUntil = useRef(0);
   const dragged = useRef(false);
@@ -67,6 +80,51 @@ export function TimelineEditor({
   zoomRef.current = zoom;
   followRef.current = follow;
 
+  function drawWave() {
+    const canvas = canvasRef.current;
+    const scroller = scrollRef.current;
+    const samples = samplesRef.current;
+    if (!canvas || !scroller) return;
+    const view = Math.max(1, Math.floor(scroller.clientWidth));
+    const ratio = Math.min(2, window.devicePixelRatio || 1);
+    canvas.width = Math.floor(view * ratio);
+    canvas.height = Math.floor(96 * ratio);
+    canvas.style.width = `${view}px`;
+    canvas.style.height = "96px";
+    canvas.style.left = `${scroller.scrollLeft}px`;
+    const ctx = canvas.getContext("2d");
+    if (!ctx || !samples || samples.length === 0) return;
+    ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+    ctx.clearRect(0, 0, view, 96);
+    ctx.fillStyle = "rgba(212, 180, 131, 0.92)";
+    const zoomNow = zoomRef.current;
+    const rate = rateRef.current;
+    const origin = scroller.scrollLeft;
+    const mid = 48;
+    const amp = 44;
+    for (let x = 0; x < view; x++) {
+      const t0 = (origin + x - PAD) / zoomNow;
+      const t1 = (origin + x + 1 - PAD) / zoomNow;
+      let i0 = Math.floor(t0 * rate);
+      let i1 = Math.floor(t1 * rate);
+      if (i1 <= i0) i1 = i0 + 1;
+      if (i0 < 0) i0 = 0;
+      if (i1 > samples.length) i1 = samples.length;
+      const span = i1 - i0;
+      const stride = span > 48 ? Math.floor(span / 24) : 1;
+      let min = 0;
+      let max = 0;
+      for (let i = i0; i < i1; i += stride) {
+        const value = samples[i] ?? 0;
+        if (value < min) min = value;
+        if (value > max) max = value;
+      }
+      const top = mid - max * amp;
+      const bottom = mid - min * amp;
+      ctx.fillRect(x, top, 1, Math.max(1, bottom - top));
+    }
+  }
+
   const shown = offsets.map((offset, index) =>
     draft?.index === index ? draft.offset : offset,
   );
@@ -75,7 +133,7 @@ export function TimelineEditor({
   const activeCue = active >= 0 ? CUES[active] : null;
   const locked = active >= 0 && locks[active] === true;
   const width = PAD + DURATION * zoom;
-  const step = zoom >= 48 ? 1 : zoom >= 24 ? 5 : 10;
+  const step = zoom >= 800 ? 0.1 : zoom >= 360 ? 0.5 : zoom >= 48 ? 1 : zoom >= 24 ? 5 : 10;
 
   function place(time: number, center: boolean) {
     const x = PAD + time * zoomRef.current;
@@ -136,22 +194,7 @@ export function TimelineEditor({
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const pixelWidth = Math.max(1, Math.ceil(DURATION * zoom));
-    const ratio = Math.min(2, window.devicePixelRatio || 1);
-    canvas.width = Math.floor(pixelWidth * ratio);
-    canvas.height = Math.floor(96 * ratio);
-    canvas.style.width = `${pixelWidth}px`;
-    canvas.style.height = "96px";
-    const ctx = canvas.getContext("2d");
-    if (!ctx || !wave || wave.length === 0) return;
-    ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
-    ctx.clearRect(0, 0, pixelWidth, 96);
-    ctx.fillStyle = "rgba(212, 180, 131, 0.38)";
-    const bar = pixelWidth / wave.length;
-    for (let i = 0; i < wave.length; i++) {
-      const height = Math.max(1, wave[i] * 88);
-      ctx.fillRect(i * bar, (96 - height) / 2, Math.max(1, bar - 0.4), height);
-    }
+    drawWave();
   }, [wave, zoom]);
 
   useEffect(() => {
@@ -161,27 +204,15 @@ export function TimelineEditor({
         const bytes = await (await fetch("/audio/shu.m4a")).arrayBuffer();
         const context = new AudioContext();
         const buffer = await context.decodeAudioData(bytes.slice(0));
+        const channel = buffer.getChannelData(0);
+        const copy = new Float32Array(channel.length);
+        copy.set(channel);
+        const rate = buffer.sampleRate;
         await context.close();
         if (cancelled) return;
-        const channel = buffer.getChannelData(0);
-        const buckets = 720;
-        const size = Math.max(1, Math.floor(channel.length / buckets));
-        const peaks = new Float32Array(buckets);
-        let max = 0;
-        for (let i = 0; i < buckets; i++) {
-          let sum = 0;
-          let count = 0;
-          const start = i * size;
-          for (let sample = 0; sample < size; sample += 24) {
-            sum += Math.abs(channel[start + sample] ?? 0);
-            count += 1;
-          }
-          peaks[i] = count > 0 ? sum / count : 0;
-          if (peaks[i] > max) max = peaks[i];
-        }
-        const scale = max > 0 ? max : 1;
-        for (let i = 0; i < buckets; i++) peaks[i] /= scale;
-        if (!cancelled) setWave(peaks);
+        samplesRef.current = copy;
+        rateRef.current = rate;
+        setWave(copy);
       } catch {
         /* waveform is optional */
       }
@@ -192,6 +223,7 @@ export function TimelineEditor({
   }, []);
 
   function onScroll() {
+    drawWave();
     if (performance.now() < followUntil.current) return;
     if (followRef.current) {
       followRef.current = false;
@@ -258,7 +290,12 @@ export function TimelineEditor({
   }
 
   const ticks: number[] = [];
-  for (let t = 0; t <= DURATION; t += step) ticks.push(t);
+  if (step < 1) {
+    const parts = Math.round(1 / step);
+    for (let i = 0; i <= Math.floor(DURATION * parts); i++) ticks.push(i / parts);
+  } else {
+    for (let t = 0; t <= DURATION; t += step) ticks.push(t);
+  }
 
   return (
     <section className="timeline-editor" data-ui="" role="dialog" aria-label="歌詞のタイムライン">
@@ -284,6 +321,7 @@ export function TimelineEditor({
         <span ref={clockRef} className="tl-clock">
           0:00
         </span>
+        <SpeedPick rate={rate} onRate={onRate} />
         <button
           type="button"
           className="timing-step"
@@ -291,6 +329,22 @@ export function TimelineEditor({
           disabled={active < 0 || locked}
         >
           −0.1
+        </button>
+        <button
+          type="button"
+          className="timing-step"
+          onClick={() => active >= 0 && onNudge(active, -0.01)}
+          disabled={active < 0 || locked}
+        >
+          −0.01
+        </button>
+        <button
+          type="button"
+          className="timing-step"
+          onClick={() => active >= 0 && onNudge(active, 0.01)}
+          disabled={active < 0 || locked}
+        >
+          +0.01
         </button>
         <button
           type="button"
@@ -345,7 +399,7 @@ export function TimelineEditor({
           <div className="tl-ruler">
             {ticks.map((tick) => (
               <span key={tick} className="tl-tick" style={{ left: PAD + tick * zoom }}>
-                {fmt(tick)}
+                {fmt(tick, step < 1)}
               </span>
             ))}
           </div>
@@ -370,6 +424,7 @@ export function TimelineEditor({
                 >
                   <span>{lock ? `🔒 ${cue.section}` : cue.section}</span>
                   <span>{cue.text}</span>
+                  <WhenLine at={adjusted[index] ?? 0} className="tl-when" />
                 </button>
               );
             })}

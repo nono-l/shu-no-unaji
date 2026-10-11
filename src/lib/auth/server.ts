@@ -30,6 +30,7 @@
  * a verified id via `@/lib/auth/middleware`.
  */
 import { betterAuth } from "better-auth";
+import { callbackOAuth } from "better-auth/api";
 import { bearer, genericOAuth } from "better-auth/plugins";
 import { tanstackStartCookies } from "better-auth/tanstack-start";
 import { getCookie } from "@tanstack/react-start/server";
@@ -151,26 +152,53 @@ export const SESSION_TOKEN_COOKIE = "__Host-grok-auth.session_token";
 // Built separately so the `betterAuth({...})` call stays easy to edit without
 // breaking brackets (models often trip on the conditional plugin spread).
 const grokOAuthPlugin = authConfigured
-  ? genericOAuth({
-      config: GROK_PROVIDERS.map(({ providerId, idp }) => ({
-        providerId,
-        clientId: grokClientId as string,
-        clientSecret: grokClientSecret as string,
-        // Prefer static endpoints over `discoveryUrl` so initiating (and
-        // completing) OAuth does not wait on a broker discovery fetch.
-        authorizationUrl: grokAuthorizationUrl,
-        tokenUrl: grokTokenUrl,
-        userInfoUrl: grokUserInfoUrl,
-        scopes: ["openid", "profile", "email"],
-        // `prompt: "login"` forces the broker to re-authenticate against the
-        // upstream on every sign-in instead of silently reusing an existing
-        // broker session. Combined with the broker sending Google
-        // `prompt=select_account`, the user always gets the account chooser
-        // and can pick (or switch) which account to sign in with.
-        authorizationUrlParams: { idp, prompt: "login" },
-      })),
-    })
+  ? (() => {
+      const plugin = genericOAuth({
+        config: GROK_PROVIDERS.map(({ providerId, idp }) => ({
+          providerId,
+          clientId: grokClientId as string,
+          clientSecret: grokClientSecret as string,
+          // Prefer static endpoints over `discoveryUrl` so initiating (and
+          // completing) OAuth does not wait on a broker discovery fetch.
+          authorizationUrl: grokAuthorizationUrl,
+          tokenUrl: grokTokenUrl,
+          userInfoUrl: grokUserInfoUrl,
+          scopes: ["openid", "profile", "email"],
+          // `prompt: "login"` forces the broker to re-authenticate against the
+          // upstream on every sign-in instead of silently reusing an existing
+          // broker session. Combined with the broker sending Google
+          // `prompt=select_account`, the user always gets the account chooser
+          // and can pick (or switch) which account to sign in with.
+          authorizationUrlParams: { idp, prompt: "login" },
+        })),
+      });
+      return {
+        ...plugin,
+        // better-auth 1.7 serves social callbacks at `/callback/:id`. The broker
+        // still allowlists `/oauth2/callback/*`, so keep that path on the provider
+        // and alias the old URL onto the new handler.
+        init: async (ctx: Parameters<typeof plugin.init>[0]) => {
+          const result = await plugin.init(ctx);
+          for (const provider of result.context.socialProviders) {
+            if (provider.id.startsWith("grok-")) {
+              provider.callbackPath = `/oauth2/callback/${provider.id}`;
+            }
+          }
+          return result;
+        },
+      };
+    })()
   : null;
+
+const oauth2CallbackAlias = {
+  id: "oauth2-callback-alias",
+  endpoints: {
+    oauth2Callback: Object.assign(
+      (ctx: Parameters<typeof callbackOAuth>[0]) => callbackOAuth(ctx),
+      { path: "/oauth2/callback/:id", options: callbackOAuth.options },
+    ),
+  },
+};
 
 export const auth = betterAuth({
   baseURL,
@@ -237,6 +265,7 @@ export const auth = betterAuth({
     // One genericOAuth provider per upstream (when auth is on), all federating
     // to the broker with the SAME client and differing only by the `idp` hint.
     ...(grokOAuthPlugin ? [grokOAuthPlugin] : []),
+    oauth2CallbackAlias,
 
     // Accept `Authorization: Bearer <session-token>` as an alternative to the
     // cookie. Needed for the LIVE PREVIEW: the app runs in an embedded iframe

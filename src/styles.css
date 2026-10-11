@@ -308,6 +308,36 @@
   padding: 0 0.4rem 0.2rem;
 }
 
+.lyric-grip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 1.15rem;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: grab;
+  touch-action: none;
+}
+
+.lyric-grip::before {
+  content: "";
+  width: 2.4rem;
+  height: 0.22rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-gold) 70%, transparent);
+}
+
+.lyric-grip:active {
+  cursor: grabbing;
+}
+
+.lyric-block[data-placed] {
+  text-shadow: 0 1px 8px #07060acc;
+}
+
 .lyric-kicker {
   display: block;
   width: 100%;
@@ -337,8 +367,72 @@
   animation: lyric-rise 420ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
 }
 
-.wipe {
+.lyric-chars {
+  background-image: none;
+  color: var(--color-fg);
+  -webkit-text-fill-color: currentcolor;
+}
+
+.wipe-ch {
   --p: 0%;
+}
+
+.wipe-edit {
+  padding: 0 0.85rem 0.45rem;
+}
+
+.wipe-pick {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  line-height: 1.6;
+  letter-spacing: 0.08em;
+  touch-action: none;
+  user-select: none;
+}
+
+.wipe-sel {
+  background: color-mix(in srgb, var(--color-gold) 35%, transparent);
+  border-radius: 0.15rem;
+}
+
+.wipe-mark {
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--color-gold) 80%, transparent);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 0.2em;
+}
+
+.wipe-slow {
+  text-decoration-style: dotted;
+  text-decoration-thickness: 1px;
+}
+
+.wipe-label {
+  margin: 0.2rem 0 0.15rem;
+  color: var(--color-muted);
+  font-family: var(--font-sans);
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+}
+
+.wipe-tools {
+  display: flex;
+  gap: 0.2rem;
+}
+
+@supports ((-webkit-background-clip: text) or (background-clip: text)) {
+  .wipe-ch {
+    background-image: linear-gradient(
+      90deg,
+      var(--color-fg) var(--p),
+      color-mix(in srgb, var(--color-fg) 36%, transparent) var(--p)
+    );
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    -webkit-text-fill-color: transparent;
+  }
 }
 
 @supports ((-webkit-background-clip: text) or (background-clip: text)) {
@@ -352,6 +446,14 @@
     -webkit-background-clip: text;
     background-clip: text;
     color: transparent;
+  }
+
+  .lyric-current.lyric-chars {
+    background-image: none;
+    background-clip: border-box;
+    -webkit-background-clip: border-box;
+    color: var(--color-fg);
+    -webkit-text-fill-color: currentcolor;
   }
 }
 
@@ -876,9 +978,28 @@
   letter-spacing: 0.04em;
   color: var(--color-gold);
   font-size: 0.7rem;
+  text-align: right;
+}
+.timing-when,
+.tl-when {
+  color: var(--color-muted);
+  letter-spacing: 0.04em;
+  font-family: var(--font-sans);
+  font-size: 0.62rem;
+  display: block;
+}
+.speed-pick {
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.05rem;
+  padding: 0.15rem 0.45rem 0;
+  display: flex;
+}
+.speed-on {
+  color: var(--color-gold);
 }
 .timing-nudge {
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 0.15rem;
   padding: 0.35rem 0.45rem 0;
   display: grid;
@@ -1050,12 +1171,13 @@
   }
 }
 .tl-clip {
-  background: #07060ac7;
+  /* 帯を濃くすると波形が隠れ、出だしを目で合わせられない */
+  background: #07060a5c;
   border-radius: 0.45rem;
 }
 @supports (color: color-mix(in lab, red, red)) {
   .tl-clip {
-    background: color-mix(in srgb, var(--color-bg) 78%, transparent);
+    background: color-mix(in srgb, var(--color-bg) 36%, transparent);
   }
 }
 .tl-clip {
@@ -1070,7 +1192,7 @@
   font-size: 0.65rem;
   display: block;
 }
-.tl-clip span:last-child {
+.tl-clip span:nth-child(2) {
   font-family: var(--font-display);
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -1085,12 +1207,12 @@
 }
 .tl-clip-lock {
   color: #d5e2f2;
-  background: #323b4b;
+  background: #8eadd466;
   border-color: #8eadd4;
 }
 @supports (color: color-mix(in lab, red, red)) {
   .tl-clip-lock {
-    background: color-mix(in srgb, #8eadd4 32%, var(--color-bg));
+    background: color-mix(in srgb, #8eadd4 40%, transparent);
   }
 }
 .tl-clip-lock span:first-child {

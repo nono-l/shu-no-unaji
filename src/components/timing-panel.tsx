@@ -4,11 +4,13 @@
 */
 import { useEffect, useRef, type PointerEvent as ReactPointerEvent, type RefObject } from "react";
 import { CUES } from "@/data/score";
+import { SpeedPick, WhenLine, offsetDigits } from "@/components/film-speed";
 
 type Props = {
   offset: number;
   offsets: number[];
   locks: boolean[];
+  adjusted: number[];
   cueIndex: number;
   canNudge: boolean;
   canAlign: boolean;
@@ -24,25 +26,33 @@ type Props = {
   onToggleLock: () => void;
   onOpenTimeline: () => void;
   onClose: () => void;
+  rate: number;
+  onRate: (rate: number) => void;
 };
 
 function phrase(offset: number, canNudge: boolean, locked: boolean): string {
   if (!canNudge) return "行をタップすると、その行だけ動きます";
   if (locked) return "この行はロックしています";
-  if (Math.abs(offset) < 0.05) return "この行は音と揃っている";
-  if (offset > 0) return `この行が ${offset.toFixed(1)}秒 早い`;
-  return `この行が ${Math.abs(offset).toFixed(1)}秒 遅い`;
+  if (Math.abs(offset) < 0.005) return "この行は音と揃っている";
+  if (offset > 0) return `この行が ${offsetDigits(offset)}秒 早い`;
+  return `この行が ${offsetDigits(offset)}秒 遅い`;
 }
 
 function shiftLabel(offset: number): string {
-  if (Math.abs(offset) < 0.05) return "";
-  return `${offset > 0 ? "+" : "−"}${Math.abs(offset).toFixed(1)}`;
+  if (Math.abs(offset) < 0.005) return "";
+  return `${offset > 0 ? "+" : "−"}${offsetDigits(offset)}`;
+}
+
+function stepText(step: number): string {
+  const text = Math.abs(step) < 0.1 ? step.toFixed(2) : step.toFixed(1);
+  return step > 0 ? `+${text}` : text;
 }
 
 export function TimingPanel({
   offset,
   offsets,
   locks,
+  adjusted,
   cueIndex,
   canNudge,
   canAlign,
@@ -58,6 +68,8 @@ export function TimingPanel({
   onToggleLock,
   onOpenTimeline,
   onClose,
+  rate,
+  onRate,
 }: Props) {
   const panelRef = useRef<HTMLElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
@@ -75,6 +87,7 @@ export function TimingPanel({
     const panel = panelRef.current;
     const parent = panel?.offsetParent as HTMLElement | null;
     if (!panel || !parent) return;
+    event.preventDefault();
     const rect = panel.getBoundingClientRect();
     const parentRect = parent.getBoundingClientRect();
     const originLeft = rect.left - parentRect.left;
@@ -82,21 +95,24 @@ export function TimingPanel({
     const startX = event.clientX;
     const startY = event.clientY;
     panel.style.right = "auto";
+    panel.style.bottom = "auto";
     panel.style.width = `${rect.width}px`;
-    const handle = event.currentTarget;
-    handle.setPointerCapture(event.pointerId);
+    const keep = 48;
     const move = (next: PointerEvent) => {
-      const maxLeft = Math.max(8, parent.clientWidth - panel.offsetWidth - 8);
-      const maxTop = Math.max(8, parent.clientHeight - panel.offsetHeight - 8);
-      panel.style.left = `${Math.min(maxLeft, Math.max(8, originLeft + next.clientX - startX))}px`;
-      panel.style.top = `${Math.min(maxTop, Math.max(8, originTop + next.clientY - startY))}px`;
+      const left = originLeft + next.clientX - startX;
+      const top = originTop + next.clientY - startY;
+      const minLeft = keep - panel.offsetWidth;
+      const maxLeft = parent.clientWidth - keep;
+      const maxTop = Math.max(0, parent.clientHeight - keep);
+      panel.style.left = `${Math.min(maxLeft, Math.max(minLeft, left))}px`;
+      panel.style.top = `${Math.min(maxTop, Math.max(0, top))}px`;
     };
     const up = () => {
-      handle.removeEventListener("pointermove", move);
-      handle.removeEventListener("pointerup", up);
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
     };
-    handle.addEventListener("pointermove", move);
-    handle.addEventListener("pointerup", up);
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
   }
 
   return (
@@ -117,10 +133,11 @@ export function TimingPanel({
           <strong ref={lyricTimeRef}>0:00</strong>
         </p>
       </div>
+      <SpeedPick rate={rate} onRate={onRate} />
       {cueIndex >= 0 ? <p className="timing-now">{CUES[cueIndex].text}</p> : null}
       <p className="timing-phrase">{phrase(offset, canNudge, locked)}</p>
       <div className="timing-nudge">
-        {[-0.5, -0.1, 0.1, 0.5].map((step) => (
+        {[-0.5, -0.1, -0.01, 0.01, 0.1, 0.5].map((step) => (
           <button
             key={step}
             type="button"
@@ -128,7 +145,7 @@ export function TimingPanel({
             onClick={() => onNudge(step)}
             disabled={!canNudge || locked}
           >
-            {step > 0 ? `+${step.toFixed(1)}` : step.toFixed(1)}
+            {stepText(step)}
           </button>
         ))}
       </div>
@@ -146,7 +163,10 @@ export function TimingPanel({
           >
             <span>{cue.section}</span>
             <span>{locks[index] ? `🔒 ${cue.text}` : cue.text}</span>
-            <span className="timing-shift">{shiftLabel(offsets[index] ?? 0)}</span>
+            <span className="timing-shift">
+              {shiftLabel(offsets[index] ?? 0)}
+              <WhenLine at={adjusted[index] ?? 0} className="timing-when" />
+            </span>
           </button>
         ))}
       </div>
