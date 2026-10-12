@@ -22,10 +22,24 @@ function asWipe(value: unknown): WipeStored[] | null {
     const offsetMs = Math.round(Number(row.offsetMs));
     if (!Number.isFinite(from) || !Number.isFinite(to) || to <= from || from < 0 || to > 80) return null;
     if (!Number.isFinite(speed) || speed < 0.25 || speed > 4) return null;
-    if (!Number.isFinite(offsetMs) || offsetMs < -2000 || offsetMs > 2000) return null;
+    if (!Number.isFinite(offsetMs) || offsetMs < -12000 || offsetMs > 12000) return null;
     spans.push({ from, to, speed, offsetMs });
   }
   return spans;
+}
+
+function asWipePack(value: unknown): { wipe: WipeStored[] | null; endMs: number | null } {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    const row = value as { spans?: unknown; endMs?: unknown };
+    return { wipe: asWipe(row.spans), endMs: asEnd(row.endMs) };
+  }
+  return { wipe: asWipe(value), endMs: null };
+}
+
+function asEnd(value: unknown): number | null {
+  const endMs = Math.round(Number(value));
+  if (!Number.isFinite(endMs) || endMs < 400 || endMs > 30000) return null;
+  return endMs;
 }
 
 function asTime(value: unknown): number | null {
@@ -45,6 +59,7 @@ export type LyricLine = {
   locked: boolean;
   adjustedAt: number | null;
   wipe: WipeStored[] | null;
+  endMs: number | null;
 };
 
 export const loadLyricLines = createServerFn({ method: "GET" }).handler(async () => {
@@ -53,13 +68,17 @@ export const loadLyricLines = createServerFn({ method: "GET" }).handler(async ()
     select line_index, offset_ms, locked, adjusted_at, wipe from lyric_lines order by line_index
   `;
   return {
-    lines: rows.map((row) => ({
-      index: Number(row.line_index),
-      offsetMs: Number(row.offset_ms),
-      locked: asBool(row.locked),
-      adjustedAt: asTime(row.adjusted_at),
-      wipe: asWipe(row.wipe),
-    })),
+    lines: rows.map((row) => {
+      const packed = asWipePack(row.wipe);
+      return {
+        index: Number(row.line_index),
+        offsetMs: Number(row.offset_ms),
+        locked: asBool(row.locked),
+        adjustedAt: asTime(row.adjusted_at),
+        wipe: packed.wipe,
+        endMs: packed.endMs,
+      };
+    }),
   };
 });
 
@@ -75,6 +94,7 @@ export const saveLyricLines = createServerFn({ method: "POST" })
         locked: line.locked === true,
         adjustedAt: asTime(line.adjustedAt),
         wipe: asWipe(line.wipe),
+        endMs: asEnd(line.endMs),
       })),
     };
   })
@@ -82,7 +102,12 @@ export const saveLyricLines = createServerFn({ method: "POST" })
     const sql = await getSql();
     for (const line of data.lines) {
       const adjusted = line.adjustedAt == null ? null : new Date(line.adjustedAt);
-      const wipe = line.wipe == null ? null : JSON.stringify(line.wipe);
+      const wipe =
+        line.endMs == null
+          ? line.wipe == null
+            ? null
+            : JSON.stringify(line.wipe)
+          : JSON.stringify({ spans: line.wipe, endMs: line.endMs });
       await sql`
         insert into lyric_lines (line_index, offset_ms, locked, adjusted_at, wipe)
         values (${line.index}, ${line.offsetMs}, ${line.locked}, ${adjusted}, ${wipe}::jsonb)

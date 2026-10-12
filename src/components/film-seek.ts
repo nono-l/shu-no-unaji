@@ -11,6 +11,11 @@ export function seekWrite(want: number | null, at: number, busy: boolean): "wait
   return "write";
 }
 
+/** 移動が終わって、再開の印だけ残っているとき鳴らす。 */
+export function seekLanded(want: number | null, busy: boolean, resume: boolean): boolean {
+  return want == null && !busy && resume;
+}
+
 export function clampSeek(time: number): number {
   if (!Number.isFinite(time)) return 0;
   return Math.min(DURATION, Math.max(0, time));

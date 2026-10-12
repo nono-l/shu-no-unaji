@@ -27,6 +27,7 @@ export type ClockInput = {
   heard: number;
   hasAudio: boolean;
   wipes?: (WipeSpan[] | null)[] | null;
+  ends?: (number | null)[] | null;
 };
 
 export type ClockStep = {
@@ -95,7 +96,7 @@ export function stepFilmClock(input: ClockInput): ClockStep {
     audioText: formatClock(time),
     lyricText: formatClock(Math.max(0, shownAt)),
     seekPct: `${(time / DURATION) * 100}%`,
-    wipe: heard >= 0 ? `${lyricWipeAt(heard, time, input.offsets) * 100}%` : "100%",
+    wipe: heard >= 0 ? `${lyricWipeAt(heard, time, input.offsets, input.ends?.[heard] ?? null) * 100}%` : "100%",
   };
 }
 
@@ -121,7 +122,7 @@ export function paintFilmFrame(input: ClockInput, view: PaintView): ClockStep {
     view.lyric.style.setProperty("--p", frame.wipe);
     const nodes = view.lyric.querySelectorAll<HTMLElement>(".wipe-ch");
     if (nodes.length > 0 && frame.heard >= 0) {
-      const { start, span } = lyricWipeSpan(frame.heard, input.offsets);
+      const { start, span } = lyricWipeSpan(frame.heard, input.offsets, input.ends?.[frame.heard] ?? null);
       const progress = charProgress(nodes.length, input.wipes?.[frame.heard] ?? null, frame.time, start, span);
       if (progress.length === nodes.length) {
         nodes.forEach((node, index) => node.style.setProperty("--p", `${progress[index] * 100}%`));

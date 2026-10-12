@@ -2,18 +2,24 @@
   歌詞のページで、文字を選んでから塗る。行の頭のボタンとは別。
 */
 import { useEffect, useRef, useState } from "react";
-import { applyWipe, covering, wipeLabel, type WipeEdit, type WipeSpan } from "@/lib/wipe-span";
+import { applyWipe, covering, holdAfter, wipeLabel, type WipeEdit, type WipeSpan } from "@/lib/wipe-span";
 
 export function WipePick({
   text,
   spans,
   disabled,
+  end,
+  room,
   onChange,
+  onEnd,
 }: {
   text: string;
   spans: WipeSpan[] | null;
   disabled: boolean;
+  end: number | null;
+  room: number;
   onChange: (next: WipeSpan[] | null) => void;
+  onEnd: (next: number | null) => void;
 }) {
   const chars = Array.from(text);
   const pickRef = useRef<HTMLParagraphElement>(null);
@@ -105,9 +111,13 @@ export function WipePick({
           const span = covered.find((item) => index >= item.from && index < item.to);
           const marked = span != null && (span.speed !== 1 || span.offset !== 0);
           const selected = index >= from && index < to;
+          const speeded = span != null && span.speed !== 1;
+          const shifted = span != null && span.offset !== 0;
           const className = [
             selected ? "wipe-sel" : "",
             marked ? "wipe-mark" : "",
+            speeded ? "wipe-bold" : "",
+            shifted ? "wipe-italic" : "",
             marked && span != null && span.speed < 1 ? "wipe-slow" : "",
           ]
             .filter(Boolean)
@@ -127,12 +137,54 @@ export function WipePick({
         <button type="button" className="text-btn" disabled={disabled || to <= from} onClick={() => edit("faster")}>
           速く
         </button>
+        <button type="button" className="text-btn" disabled={disabled || to <= from} onClick={() => edit("earlierJump")}>
+          1秒前
+        </button>
         <button type="button" className="text-btn" disabled={disabled || to <= from} onClick={() => edit("earlier")}>
           前へ
         </button>
         <button type="button" className="text-btn" disabled={disabled || to <= from} onClick={() => edit("later")}>
           後ろへ
         </button>
+        <button type="button" className="text-btn" disabled={disabled || to <= from} onClick={() => edit("laterJump")}>
+          1秒後
+        </button>
+        <button type="button" className="text-btn" disabled={disabled || to <= 0 || to >= chars.length} onClick={() => onChange(holdAfter(chars.length, spans, to))}>
+          タメ
+        </button>
+        <button type="button" className="text-btn" disabled={disabled || to <= from} onClick={() => edit("clear")}>
+          クリア
+        </button>
+      </div>
+      <div className="wipe-end">
+        {end == null ? (
+          <button type="button" className="text-btn" disabled={disabled || room < 0.4} onClick={() => onEnd(Math.round(room * 10) / 10)}>
+            終端
+          </button>
+        ) : (
+          <>
+            <span className="wipe-label">終端 {end.toFixed(1)}秒</span>
+            <button
+              type="button"
+              className="text-btn"
+              disabled={disabled || end <= 0.4}
+              onClick={() => onEnd(Math.round(Math.max(0.4, end - 0.1) * 10) / 10)}
+            >
+              短く
+            </button>
+            <button
+              type="button"
+              className="text-btn"
+              disabled={disabled || end >= room - 0.05}
+              onClick={() => onEnd(Math.round(Math.min(room, end + 0.1) * 10) / 10)}
+            >
+              長く
+            </button>
+            <button type="button" className="text-btn" disabled={disabled} onClick={() => onEnd(null)}>
+              自動
+            </button>
+          </>
+        )}
       </div>
     </div>
   );

@@ -66,52 +66,52 @@ export const CUES: Cue[] = [
   { t: 69.1, section: "サビ", text: "まだ行かせない" },
   { t: 70.1, section: "サビ", text: "この手で闇を止める" },
 
-  { t: 84, section: "二番", text: "鏡の前で 目を伏せたまま" },
-  { t: 87.6, section: "二番", text: "紅を引いたら 嘘も深くなる" },
+  { t: 82.02, section: "二番", text: "鏡の前で 目を伏せたまま" },
+  { t: 86.4, section: "二番", text: "紅を引いたら 嘘も深くなる" },
   { t: 91.2, section: "二番", text: "簪ひとつが 落ちる音さえ" },
-  { t: 94.8, section: "二番", text: "胸の奥では 鐘みたいだ" },
-  { t: 98.2, section: "二番", text: "笑うなら今" },
-  { t: 101, section: "二番", text: "泣くなら後で" },
-  { t: 104.2, section: "二番", text: "選ぶのは誰だ" },
-  { t: 107.6, section: "二番", text: "お前じゃない" },
+  { t: 95.9, section: "二番", text: "胸の奥では 鐘みたいだ" },
+  { t: 100.9, section: "二番", text: "笑うなら今" },
+  { t: 102.96, section: "二番", text: "泣くなら後で" },
+  { t: 105.2, section: "二番", text: "選ぶのは誰だ" },
+  { t: 108.1, section: "二番", text: "お前じゃない" },
 
-  { t: 112.6, section: "足音", text: "息をひそめて" },
+  { t: 112.7, section: "足音", text: "息をひそめて" },
   { t: 114.6, section: "足音", text: "足音を消して" },
   { t: 117, section: "足音", text: "その背中まで" },
   { t: 119.2, section: "足音", text: "あと少しだろ" },
-  { t: 121.2, section: "足音", text: "指先ひとつで" },
-  { t: 124, section: "足音", text: "運命を裂いて" },
+  { t: 122, section: "足音", text: "指先ひとつで" },
+  { t: 123.8, section: "足音", text: "運命を裂いて" },
   { t: 126.6, section: "足音", text: "今夜だけはまだ" },
   { t: 129.6, section: "足音", text: "終わらせない" },
 
-  { t: 133.2, section: "サビ", text: "まだ行かせない" },
-  { t: 134.5, section: "サビ", text: "まだ行かせない" },
+  { t: 133.4, section: "サビ", text: "まだ行かせない" },
+  { t: 134.9, section: "サビ", text: "まだ行かせない" },
   { t: 135.9, section: "サビ", text: "朱のうなじが燃えてる" },
-  { t: 137.6, section: "サビ", text: "まだ行かせない" },
-  { t: 139, section: "サビ", text: "まだ行かせない" },
+  { t: 138.1, section: "サビ", text: "まだ行かせない" },
+  { t: 139.4, section: "サビ", text: "まだ行かせない" },
   { t: 140.5, section: "サビ", text: "この手で闇を止める" },
 
-  { t: 163, section: "橋", text: "花びらみたいに" },
-  { t: 165.2, section: "橋", text: "散るのが罪なら" },
-  { t: 167.4, section: "橋", text: "この胸ごと" },
-  { t: 169.4, section: "橋", text: "盾にしてやる" },
-  { t: 172, section: "橋", text: "月が見ている" },
-  { t: 175, section: "橋", text: "隠しきれない" },
-  { t: 177.5, section: "橋", text: "名前も傷も" },
-  { t: 180.2, section: "橋", text: "抱えて進め" },
+  { t: 162.3, section: "橋", text: "花びらみたいに" },
+  { t: 164.5, section: "橋", text: "散るのが罪なら" },
+  { t: 166.9, section: "橋", text: "この胸ごと" },
+  { t: 168.9, section: "橋", text: "盾にしてやる" },
+  { t: 171.6, section: "橋", text: "月が見ている" },
+  { t: 173.9, section: "橋", text: "隠しきれない" },
+  { t: 176.4, section: "橋", text: "名前も傷も" },
+  { t: 178.7, section: "橋", text: "抱えて進め" },
 
-  { t: 185, section: "最後", text: "まだ行かせない" },
-  { t: 186.2, section: "最後", text: "まだ行かせない" },
+  { t: 185.3, section: "最後", text: "まだ行かせない" },
+  { t: 186.6, section: "最後", text: "まだ行かせない" },
   { t: 187.5, section: "最後", text: "朱のうなじが燃えてる" },
-  { t: 189.2, section: "最後", text: "まだ行かせない" },
-  { t: 190.6, section: "最後", text: "まだ行かせない" },
-  { t: 192, section: "最後", text: "この手で闇を止める" },
+  { t: 190.2, section: "最後", text: "まだ行かせない" },
+  { t: 191.3, section: "最後", text: "まだ行かせない" },
+  { t: 192.3, section: "最後", text: "この手で闇を止める" },
   { t: 194.8, section: "最後", text: "まだ行かせない" },
   { t: 196, section: "最後", text: "まだ行かせない" },
   { t: 197.4, section: "最後", text: "朝が来るまで守る" },
-  { t: 199.2, section: "最後", text: "まだ行かせない" },
-  { t: 200.6, section: "最後", text: "まだ行かせない" },
-  { t: 202.4, section: "最後", text: "あの花魁には渡さない" },
+  { t: 199.5, section: "最後", text: "まだ行かせない" },
+  { t: 200.7, section: "最後", text: "まだ行かせない" },
+  { t: 201.9, section: "最後", text: "あの花魁には渡さない" },
 ];
 
 export function formatCueTime(seconds: number): string {
@@ -185,21 +185,23 @@ export function cueIndexAt(t: number, offsets: number[]): number {
 /**
  * 仮の白塗りの窓。行が聞こえてから次の行まで。最短 0.4 秒。
  * 次が近すぎるか、最後の行なら 3.2 秒。範囲の速度はここでは足さない。
+ * end があるときは、その秒で塗り切る。次の行より先には延ばさない。
  */
-export function lyricWipeSpan(index: number, offsets: number[]): { start: number; span: number } {
+export function lyricWipeSpan(index: number, offsets: number[], end?: number | null): { start: number; span: number } {
   const cue = CUES[index];
   if (!cue) return { start: 0, span: 0.4 };
   const start = cue.t - (offsets[index] ?? 0);
   const next = CUES[index + 1];
-  const end = next ? next.t - (offsets[index + 1] ?? 0) : start + 3.2;
-  const span = Math.max(0.4, (end > start + 0.05 ? end : start + 3.2) - start);
-  return { start, span };
+  const autoEnd = next ? next.t - (offsets[index + 1] ?? 0) : start + 3.2;
+  const span = Math.max(0.4, (autoEnd > start + 0.05 ? autoEnd : start + 3.2) - start);
+  if (end == null || !Number.isFinite(end)) return { start, span };
+  return { start, span: Math.max(0.4, Math.min(span, end)) };
 }
 
 /** 範囲が無いときの進み。式は lyricWipeSpan だけ。 */
-export function lyricWipeAt(index: number, time: number, offsets: number[]): number {
+export function lyricWipeAt(index: number, time: number, offsets: number[], end?: number | null): number {
   if (!CUES[index]) return 1;
-  const { start, span } = lyricWipeSpan(index, offsets);
+  const { start, span } = lyricWipeSpan(index, offsets, end);
   return Math.min(1, Math.max(0, (time - start) / span));
 }
 

@@ -21,6 +21,7 @@ import {
   DURATION,
   clampOffset,
   cueHeardAt,
+  lyricWipeSpan,
   sectionMarks,
   zeroLocks,
   zeroOffsets,
@@ -36,6 +37,7 @@ import { bindMediaSession, sessionMetadata, sessionPosition } from "@/components
 import { resumeVideo, syncSceneVideo } from "@/components/film-video";
 import {
   clampSeek,
+  seekLanded,
   seekWrite,
   lineLoop,
   loopAfterLine,
@@ -70,6 +72,7 @@ export function FilmPlayer() {
   const scrubbing = useRef(false);
   const offsetsRef = useRef(zeroOffsets());
   const wipesRef = useRef<(WipeSpan[] | null)[]>(zeroOffsets().map(() => null));
+  const endsRef = useRef<(number | null)[]>(zeroOffsets().map(() => null));
   const locksRef = useRef(zeroLocks());
   const pinRef = useRef<number | null>(null);
   const cueRef = useRef(-1);
@@ -123,6 +126,7 @@ export function FilmPlayer() {
   const [muted, setMuted] = useState(false);
   const [offsets, setOffsets] = useState(zeroOffsets);
   const [wipes, setWipes] = useState<(WipeSpan[] | null)[]>(() => zeroOffsets().map(() => null));
+  const [ends, setEnds] = useState<(number | null)[]>(() => zeroOffsets().map(() => null));
   const [locks, setLocks] = useState(zeroLocks);
   const [adjusted, setAdjusted] = useState<number[]>(() => zeroOffsets().map(() => 0));
   const [timing, setTiming] = useState(false);
@@ -130,6 +134,7 @@ export function FilmPlayer() {
   const [status, setStatus] = useState("行をタップすると、その行だけ動きます");
   const [statusKind, setStatusKind] = useState<StatusKind>("muted");
   const [loopMode, setLoopMode] = useState<"line" | "section" | null>(null);
+  const [loopLine, setLoopLine] = useState<number | null>(null);
   const [remain, setRemain] = useState(false);
   const [resumeAt, setResumeAt] = useState<number | null>(null);
   const [shared, setShared] = useState(false);
@@ -146,6 +151,10 @@ export function FilmPlayer() {
       wipes: (next) => {
         wipesRef.current = next;
         setWipes(next);
+      },
+      ends: (next) => {
+        endsRef.current = next;
+        setEnds(next);
       },
       locks: (next) => {
         locksRef.current = next;
@@ -263,6 +272,7 @@ export function FilmPlayer() {
         heard: cueRef.current,
         hasAudio: audio != null,
         wipes: wipesRef.current,
+        ends: endsRef.current,
       },
       {
         time: timeRef.current,
@@ -277,6 +287,7 @@ export function FilmPlayer() {
     if (frame.clearLoop) {
       loopRef.current = null;
       setLoopMode(null);
+      setLoopLine(null);
     }
     if (frame.sceneChanged) {
       sceneRef.current = frame.scene;
@@ -311,14 +322,17 @@ export function FilmPlayer() {
     if (!loopRef.current) return;
     loopRef.current = null;
     setLoopMode(null);
+    setLoopLine(null);
   }
 
   function flushSeek() {
     const audio = audioRef.current;
     if (!audio) return;
     const decision = seekWrite(seekWant.current, audio.currentTime, seekBusy.current);
-    if (decision === "wait") return;
-    if (decision === "done") {
+    if (decision === "wait") {
+      if (!seekLanded(seekWant.current, seekBusy.current, seekResume.current)) return;
+    }
+    if (decision === "wait" || decision === "done") {
       seekWant.current = null;
       if (seekResume.current) {
         seekResume.current = false;
@@ -444,6 +458,11 @@ export function FilmPlayer() {
     memory.setWipe(index, spans);
   }
 
+  function writeEnd(index: number, end: number | null) {
+    if (index < 0 || locked(index)) return;
+    memory.setEnd(index, end);
+  }
+
   function nudgeShown(delta: number) {
     const index = pinRef.current === null ? cueRef.current : pinRef.current;
     if (index < 0 || locked(index)) return;
@@ -483,10 +502,10 @@ export function FilmPlayer() {
     const time = audioRef.current?.currentTime ?? 0;
     loopRef.current = sectionLoop(cueRef.current, time, offsetsRef.current);
     setLoopMode("section");
+    setLoopLine(null);
   }
 
-  function toggleLineLoop() {
-    const index = cueRef.current;
+  function repeatLine(index: number, andPlay = false) {
     if (index < 0) return;
     if (loopRef.current?.kind === "line" && loopRef.current.from === index) {
       clearLoop();
@@ -494,6 +513,14 @@ export function FilmPlayer() {
     }
     loopRef.current = lineLoop(index);
     setLoopMode("line");
+    setLoopLine(index);
+    if (!andPlay) return;
+    const cue = CUES[index];
+    if (cue) seek(cueHeardAt(index, offsetsRef.current), true);
+  }
+
+  function toggleLineLoop() {
+    repeatLine(cueRef.current);
   }
 
   function stepScene(dir: number) {
@@ -736,12 +763,18 @@ export function FilmPlayer() {
         line={line}
         upcoming={upcoming ? upcoming.text : null}
         lineLoop={loopMode === "line"}
+        lineRepeating={loopMode === "line" && loopLine === shown}
         lyricRef={lyricRef}
         cueIndex={cueIndex}
         shown={shown}
         locks={locks}
         wipes={wipes}
+        wipeEnd={shown >= 0 ? (ends[shown] ?? null) : null}
+        wipeRoom={shown >= 0 ? lyricWipeSpan(shown, offsets).span : 0.4}
         onWipe={writeWipe}
+        onWipeEnd={(end) => writeEnd(shown, end)}
+        onToggleLock={() => toggleLock(shown)}
+        onRepeatLine={() => repeatLine(shown, true)}
         activeLineRef={activeLineRef}
         marks={marks}
         rangeRef={rangeRef}

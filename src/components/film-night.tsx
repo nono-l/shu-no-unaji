@@ -21,6 +21,7 @@ import { CUES, DURATION } from "@/data/score";
 import { formatClock } from "@/components/film-paint";
 import { WipePick } from "@/components/film-wipe";
 import type { WipeSpan } from "@/lib/wipe-span";
+import { covering } from "@/lib/wipe-span";
 
 function placeLyricBlock(block: HTMLElement, spot: { left: number; top: number; width: number }) {
   block.dataset.placed = "1";
@@ -80,7 +81,13 @@ export function FilmDock({
   shown,
   locks,
   wipes,
+  wipeEnd,
+  wipeRoom,
   onWipe,
+  onWipeEnd,
+  onToggleLock,
+  onRepeatLine,
+  lineRepeating,
   activeLineRef,
   marks,
   rangeRef,
@@ -123,7 +130,13 @@ export function FilmDock({
   shown: number;
   locks: boolean[];
   wipes: (WipeSpan[] | null)[];
+  wipeEnd: number | null;
+  wipeRoom: number;
   onWipe: (index: number, spans: WipeSpan[] | null) => void;
+  onWipeEnd: (end: number | null) => void;
+  onToggleLock: () => void;
+  onRepeatLine: () => void;
+  lineRepeating: boolean;
   activeLineRef: Ref<HTMLButtonElement>;
   marks: { index: number; name: string; t: number }[];
   rangeRef: Ref<HTMLInputElement>;
@@ -155,8 +168,11 @@ export function FilmDock({
   onSheet: () => void;
 }) {
   const nudgeOff = shown < 0 || locks[shown] === true;
+  const heardCover = cueIndex >= 0 ? covering(Array.from(line).length, wipes[cueIndex] ?? null) : [];
   const lyricBlockRef = useRef<HTMLDivElement>(null);
   const lyricSpot = useRef<{ left: number; top: number; width: number } | null>(null);
+  const sheetRef = useRef<HTMLElement>(null);
+  const sheetSpot = useRef<{ left: number; top: number; width: number } | null>(null);
 
   useEffect(() => {
     const block = lyricBlockRef.current;
@@ -164,6 +180,43 @@ export function FilmDock({
     if (!block || !spot) return;
     placeLyricBlock(block, spot);
   });
+
+  useEffect(() => {
+    const sheet = sheetRef.current;
+    const spot = sheetSpot.current;
+    if (!sheet || !spot) return;
+    placeLyricBlock(sheet, spot);
+    sheet.style.zIndex = "8";
+  }, [sheet]);
+
+  function dragSheet(event: ReactPointerEvent<HTMLDivElement>) {
+    if ((event.target as HTMLElement).closest("button")) return;
+    const sheet = sheetRef.current;
+    if (!sheet) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const rect = sheet.getBoundingClientRect();
+    const originLeft = sheetSpot.current?.left ?? rect.left;
+    const originTop = sheetSpot.current?.top ?? rect.top;
+    const width = sheetSpot.current?.width ?? rect.width;
+    const startX = event.clientX;
+    const startY = event.clientY;
+    const move = (next: PointerEvent) => {
+      const keep = 48;
+      const left = Math.min(window.innerWidth - keep, Math.max(keep - width, originLeft + next.clientX - startX));
+      const top = Math.min(window.innerHeight - keep, Math.max(8, originTop + next.clientY - startY));
+      const spot = { left, top, width };
+      sheetSpot.current = spot;
+      placeLyricBlock(sheet, spot);
+      sheet.style.zIndex = "8";
+    };
+    const up = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+  }
 
   function dragLyrics(event: ReactPointerEvent<HTMLDivElement>) {
     const block = lyricBlockRef.current;
@@ -197,9 +250,12 @@ export function FilmDock({
   return (
     <div className="dock" data-ui="">
       {sheet ? (
-        <section className="sheet" aria-label="歌詞">
-          <div className="sheet-head">
+        <section ref={sheetRef} className="sheet" aria-label="歌詞">
+          <div className="sheet-head" onPointerDown={dragSheet}>
             <h2>歌詞</h2>
+            <button type="button" className="text-btn sheet-nudge" onClick={() => onNudge(6)} disabled={nudgeOff}>
+              6秒前
+            </button>
             <button type="button" className="text-btn sheet-nudge" onClick={() => onNudge(0.1)} disabled={nudgeOff}>
               早める
             </button>
@@ -211,12 +267,25 @@ export function FilmDock({
             </button>
           </div>
           {shown >= 0 ? (
-            <WipePick
-              text={CUES[shown].text}
-              spans={wipes[shown] ?? null}
-              disabled={locks[shown] === true}
-              onChange={(next) => onWipe(shown, next)}
-            />
+            <>
+              <WipePick
+                text={CUES[shown].text}
+                spans={wipes[shown] ?? null}
+                disabled={locks[shown] === true}
+                end={wipeEnd}
+                room={wipeRoom}
+                onChange={(next) => onWipe(shown, next)}
+                onEnd={onWipeEnd}
+              />
+              <div className="sheet-acts">
+                <button type="button" className="text-btn" onClick={onToggleLock}>
+                  {locks[shown] ? "解除" : "ロック"}
+                </button>
+                <button type="button" className="text-btn" aria-pressed={lineRepeating} onClick={onRepeatLine}>
+                  {lineRepeating ? "リピート中" : "リピート"}
+                </button>
+              </div>
+            </>
           ) : null}
           <div className="sheet-scroll">
             {CUES.map((item, index) => (
@@ -233,11 +302,11 @@ export function FilmDock({
             ))}
           </div>
         </section>
-      ) : (
-        <div className="lyric-block" ref={lyricBlockRef}>
-          {timing ? (
-            <div className="lyric-grip" role="button" aria-label="歌詞を動かす" onPointerDown={dragLyrics} />
-          ) : null}
+      ) : null}
+      <div className="lyric-block" ref={lyricBlockRef}>
+        {timing || sheet ? (
+          <div className="lyric-grip" role="button" aria-label="歌詞を動かす" onPointerDown={dragLyrics} />
+        ) : null}
           <button type="button" className="lyric-kicker" onClick={onSection}>
             {karaoke ? `${section} · 歌なし` : section}
           </button>
@@ -251,18 +320,27 @@ export function FilmDock({
             onClick={onLineLoop}
           >
             {cueIndex >= 0
-              ? Array.from(line).map((char, index) => (
-                  <span key={index} className="wipe-ch">
-                    {char === " " ? "\u00a0" : char}
-                  </span>
-                ))
+              ? Array.from(line).map((char, index) => {
+                  const span = heardCover.find((item) => index >= item.from && index < item.to);
+                  const className = [
+                    "wipe-ch",
+                    span && span.speed !== 1 ? "wipe-bold" : "",
+                    span && span.offset !== 0 ? "wipe-italic" : "",
+                  ]
+                    .filter(Boolean)
+                    .join(" ");
+                  return (
+                    <span key={index} className={className}>
+                      {char === " " ? "\u00a0" : char}
+                    </span>
+                  );
+                })
               : line}
           </button>
           <button type="button" className="lyric-next" onClick={onNext} disabled={!upcoming}>
             {upcoming ? upcoming : " "}
           </button>
         </div>
-      )}
 
       <div className="transport">
         <div className="seek-wrap">

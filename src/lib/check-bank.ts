@@ -152,7 +152,7 @@ const CLAIMS: Claim[] = [
   { id: "wipe-sep", file: "wipe-span.ts", text: "行の中の白塗りは行の頭のずれとは別" },
   { id: "wipe-plain", file: "wipe-span.ts", text: "範囲が無ければ行全体が速度 1" },
   { id: "wipe-speed", file: "wipe-span.ts", text: "白塗りの速度は 0.25 から 4" },
-  { id: "wipe-off", file: "wipe-span.ts", text: "白塗りの始まりは -2 秒から 2 秒" },
+  { id: "wipe-off", file: "wipe-span.ts", text: "白塗りの始まりは -12 秒から 12 秒" },
   { id: "wipe-step", file: "wipe-span.ts", text: "白塗りの速度の段は 1.25 倍" },
   { id: "wipe-ostep", file: "wipe-span.ts", text: "白塗りの始まりの段は 0.05 秒" },
   { id: "wipe-ms", file: "wipe-span.ts", text: "保存する白塗りの始まりはミリ秒" },

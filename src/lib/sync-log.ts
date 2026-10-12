@@ -66,3 +66,17 @@ export function subscribeSync(listen: () => void): () => void {
   listeners.add(listen);
   return () => listeners.delete(listen);
 }
+
+/** 画面の端へ寄せても、36px は残す。再生の計算ではない。 */
+export function dragSpot(
+  origin: { left: number; top: number },
+  delta: { x: number; y: number },
+  size: { width: number; height: number },
+  frame: { width: number; height: number },
+): { left: number; top: number } {
+  const keep = 36;
+  return {
+    left: Math.min(frame.width - keep, Math.max(keep - size.width, origin.left + delta.x)),
+    top: Math.min(frame.height - keep, Math.max(8, origin.top + delta.y)),
+  };
+}

@@ -4,7 +4,7 @@
   認証は持たない。塗りの式は持たない。範囲の控えは、行の頭と一緒に送る。
 */
 import { CUES, clampOffset, zeroLocks, zeroOffsets } from "../data/score.ts";
-import { packWipe, unpackWipe, type WipeSpan, type WipeStored } from "./wipe-span.ts";
+import { packWipe, packWipeLine, unpackWipeLine, type WipeSpan, type WipeStored } from "./wipe-span.ts";
 import { offsetTrace } from "./sync-log.ts";
 
 const OFFSET_KEY = "shu-line-offsets";
@@ -20,6 +20,7 @@ type Line = {
   locked: boolean;
   adjustedAt?: number | null;
   wipe?: WipeStored[] | null;
+  endMs?: number | null;
 };
 
 type Listen = {
@@ -28,6 +29,7 @@ type Listen = {
   locks: (next: boolean[]) => void;
   adjusted?: (next: number[]) => void;
   wipes?: (next: (WipeSpan[] | null)[]) => void;
+  ends?: (next: (number | null)[]) => void;
   trace?: (line: string) => void;
 };
 
@@ -74,20 +76,27 @@ function wipeKey(wipe: WipeStored[] | null | undefined): string {
   return wipe && wipe.length > 0 ? JSON.stringify(wipe) : "";
 }
 
-function readStoredWipes(): (WipeSpan[] | null)[] {
-  const base = zeroOffsets().map(() => null as WipeSpan[] | null);
+function wipeSig(offsetMs: number, locked: boolean, wipe: WipeStored[] | null | undefined, endMs: number | null | undefined) {
+  return `${offsetMs}:${locked ? 1 : 0}:${wipeKey(wipe)}:${endMs ?? ""}`;
+}
+
+function readStoredWipeLines(): { spans: (WipeSpan[] | null)[]; ends: (number | null)[] } {
+  const spans = zeroOffsets().map(() => null as WipeSpan[] | null);
+  const ends = zeroOffsets().map(() => null as number | null);
   try {
     const raw = localStorage.getItem(WIPE_KEY);
-    if (!raw) return base;
+    if (!raw) return { spans, ends };
     const parsed = JSON.parse(raw) as unknown;
-    if (!Array.isArray(parsed)) return base;
-    for (let i = 0; i < base.length; i++) {
-      base[i] = unpackWipe(parsed[i], Array.from(CUES[i]?.text ?? "").length);
+    if (!Array.isArray(parsed)) return { spans, ends };
+    for (let i = 0; i < spans.length; i++) {
+      const line = unpackWipeLine(parsed[i], Array.from(CUES[i]?.text ?? "").length);
+      spans[i] = line.spans;
+      ends[i] = line.end;
     }
   } catch {
     /* private mode */
   }
-  return base;
+  return { spans, ends };
 }
 
 function readStoredLocks(): boolean[] {
@@ -119,6 +128,7 @@ async function remoteSave(lines: Line[]): Promise<unknown> {
         locked: line.locked,
         adjustedAt: line.adjustedAt ?? null,
         wipe: line.wipe ?? null,
+        endMs: line.endMs ?? null,
       })),
     },
   });
@@ -128,9 +138,11 @@ export function createLineMemory(listen: Listen, io?: Io) {
   let offsets = zeroOffsets();
   let locks = zeroLocks();
   let adjusted = readStoredAdjusted();
-  let wipes = readStoredWipes();
+  const storedWipes = readStoredWipeLines();
+  let wipes = storedWipes.spans;
+  let ends = storedWipes.ends;
   const savedSig = new Map<number, string>();
-  const pending = new Map<number, { offsetMs: number; adjustedAt: number | null; wipe: WipeStored[] | null }>();
+  const pending = new Map<number, { offsetMs: number; adjustedAt: number | null; wipe: WipeStored[] | null; endMs: number | null }>();
   const touchedLocks = new Set<number>();
   let localDirty = false;
   let saveTimer: ReturnType<typeof setTimeout> | null = null;
@@ -168,11 +180,16 @@ export function createLineMemory(listen: Listen, io?: Io) {
     }
   }
 
-  function publishWipes(next: (WipeSpan[] | null)[]) {
+  function publishWipes(next: (WipeSpan[] | null)[], nextEnds: (number | null)[] = ends) {
     wipes = next;
+    ends = nextEnds;
     listen.wipes?.(next);
+    listen.ends?.(nextEnds);
     try {
-      localStorage.setItem(WIPE_KEY, JSON.stringify(next.map((spans) => packWipe(spans))));
+      localStorage.setItem(
+        WIPE_KEY,
+        JSON.stringify(next.map((spans, index) => packWipeLine(spans, nextEnds[index] ?? null))),
+      );
     } catch {
       /* ignore */
     }
@@ -187,7 +204,8 @@ export function createLineMemory(listen: Listen, io?: Io) {
       next[index] = at ?? Date.now();
       publishAdjusted(next);
     }
-    pending.set(index, { offsetMs, adjustedAt: at, wipe: packWipe(wipes[index] ?? null) });
+    const endMs = ends[index] == null ? null : Math.round(ends[index] * 1000);
+    pending.set(index, { offsetMs, adjustedAt: at, wipe: packWipe(wipes[index] ?? null), endMs });
     localDirty = true;
     if (saveTimer != null) clearTimeout(saveTimer);
     saveTimer = setTimeout(() => {
@@ -213,20 +231,21 @@ export function createLineMemory(listen: Listen, io?: Io) {
     try {
       while (pending.size > 0) {
         const lines = [...pending.entries()]
-          .filter(([index, line]) => savedSig.get(index) !== `${line.offsetMs}:${locks[index] ? 1 : 0}:${wipeKey(line.wipe)}`)
+          .filter(([index, line]) => savedSig.get(index) !== wipeSig(line.offsetMs, locks[index] === true, line.wipe, line.endMs))
           .map(([index, line]) => ({
             index,
             offsetMs: line.offsetMs,
             locked: locks[index] === true,
             adjustedAt: line.adjustedAt,
             wipe: line.wipe ?? null,
+            endMs: line.endMs ?? null,
           }));
         pending.clear();
         if (lines.length === 0) continue;
         batch = lines;
         await (io ? io.save(lines) : remoteSave(lines));
         for (const line of lines) {
-          savedSig.set(line.index, `${line.offsetMs}:${line.locked ? 1 : 0}:${wipeKey(line.wipe)}`);
+          savedSig.set(line.index, wipeSig(line.offsetMs, line.locked, line.wipe, line.endMs));
         }
         batch = [];
       }
@@ -235,7 +254,12 @@ export function createLineMemory(listen: Listen, io?: Io) {
       failed = true;
       for (const line of batch) {
         if (!pending.has(line.index)) {
-          pending.set(line.index, { offsetMs: line.offsetMs, adjustedAt: line.adjustedAt ?? null, wipe: line.wipe ?? null });
+          pending.set(line.index, {
+            offsetMs: line.offsetMs,
+            adjustedAt: line.adjustedAt ?? null,
+            wipe: line.wipe ?? null,
+            endMs: line.endMs ?? null,
+          });
         }
       }
       if (alive) listen.note("残せず、この画面だけ覚えています", "bad");
@@ -271,6 +295,7 @@ export function createLineMemory(listen: Listen, io?: Io) {
         const nextLocks = locks.slice();
         const nextAdjusted = adjusted.slice();
         const nextWipes = wipes.slice();
+        const nextEnds = ends.slice();
         let locksChanged = false;
         let adjustedChanged = false;
         let wipesChanged = false;
@@ -284,19 +309,18 @@ export function createLineMemory(listen: Listen, io?: Io) {
           const at = line.adjustedAt ?? 0;
           if (nextAdjusted[line.index] !== at) adjustedChanged = true;
           nextAdjusted[line.index] = at;
-          const unpacked = unpackWipe(line.wipe ?? null, Array.from(CUES[line.index]?.text ?? "").length);
+          const unpacked = unpackWipeLine(line.wipe ?? null, Array.from(CUES[line.index]?.text ?? "").length).spans;
+          const end = line.endMs == null ? null : line.endMs / 1000;
           const packedNext = wipeKey(packWipe(unpacked));
-          if (wipeKey(packWipe(nextWipes[line.index])) !== packedNext) wipesChanged = true;
+          if (wipeKey(packWipe(nextWipes[line.index])) !== packedNext || nextEnds[line.index] !== end) wipesChanged = true;
           nextWipes[line.index] = unpacked;
-          savedSig.set(
-            line.index,
-            `${Math.round(nextOffsets[line.index] * 1000)}:${nextLocks[line.index] ? 1 : 0}:${wipeKey(line.wipe)}`,
-          );
+          nextEnds[line.index] = end;
+          savedSig.set(line.index, wipeSig(Math.round(nextOffsets[line.index] * 1000), nextLocks[line.index], line.wipe, line.endMs));
         }
         publishOffsets(nextOffsets);
         if (locksChanged) publishLocks(nextLocks);
         if (adjustedChanged) publishAdjusted(nextAdjusted);
-        if (wipesChanged) publishWipes(nextWipes);
+        if (wipesChanged) publishWipes(nextWipes, nextEnds);
         listen.trace?.(offsetTrace("remote", nextOffsets, result.lines.length));
         listen.note(
           result.lines.length > 0 ? "行ごとのずれを戻しました" : "行を選ぶと、その行だけ動きます",
@@ -330,6 +354,13 @@ export function createLineMemory(listen: Listen, io?: Io) {
       const next = wipes.slice();
       next[index] = spans;
       publishWipes(next);
+      queue(index);
+    },
+    setEnd(index: number, end: number | null) {
+      if (index < 0 || index >= ends.length) return;
+      const next = ends.slice();
+      next[index] = end;
+      publishWipes(wipes, next);
       queue(index);
     },
     start,

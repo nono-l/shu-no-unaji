@@ -5,16 +5,17 @@
 
 export type WipeSpan = { from: number; to: number; speed: number; offset: number };
 
-export type WipeEdit = "faster" | "slower" | "earlier" | "later";
+export type WipeEdit = "faster" | "slower" | "earlier" | "later" | "earlierJump" | "laterJump" | "clear";
 
 export type WipeStored = { from: number; to: number; speed: number; offsetMs: number };
 
 const SPEED_MIN = 0.25;
 const SPEED_MAX = 4;
-const OFFSET_MIN = -2;
-const OFFSET_MAX = 2;
+const OFFSET_MIN = -12;
+const OFFSET_MAX = 12;
 const SPEED_STEP = 1.25;
 const OFFSET_STEP = 0.05;
+const OFFSET_JUMP = 1;
 
 function clampSpeed(speed: number): number {
   if (!Number.isFinite(speed) || speed <= 0) return 1;
@@ -68,9 +69,12 @@ export function isPlain(length: number, spans: WipeSpan[] | null): boolean {
 }
 
 function editSpan(span: WipeSpan, edit: WipeEdit): WipeSpan {
+  if (edit === "clear") return { ...span, speed: 1, offset: 0 };
   if (edit === "faster") return { ...span, speed: clampSpeed(span.speed * SPEED_STEP) };
   if (edit === "slower") return { ...span, speed: clampSpeed(span.speed / SPEED_STEP) };
   if (edit === "earlier") return { ...span, offset: clampWipeOffset(span.offset + OFFSET_STEP) };
+  if (edit === "earlierJump") return { ...span, offset: clampWipeOffset(span.offset + OFFSET_JUMP) };
+  if (edit === "laterJump") return { ...span, offset: clampWipeOffset(span.offset - OFFSET_JUMP) };
   return { ...span, offset: clampWipeOffset(span.offset - OFFSET_STEP) };
 }
 
@@ -96,6 +100,13 @@ export function applyWipe(
   });
   const merged = merge(next);
   return isPlain(length, merged) ? null : merged;
+}
+
+/** 選んだ文字のうしろだけを、1秒遅らせる。早口のあとのタメ。 */
+export function holdAfter(length: number, spans: WipeSpan[] | null, at: number): WipeSpan[] | null {
+  const cut = Math.max(0, Math.min(length, Math.round(at)));
+  if (cut <= 0 || cut >= length) return isPlain(length, spans) ? null : covering(length, spans);
+  return applyWipe(length, spans, cut, length, "laterJump");
 }
 
 export function charProgress(
@@ -128,6 +139,23 @@ export function packWipe(spans: WipeSpan[] | null): WipeStored[] | null {
     speed: span.speed,
     offsetMs: Math.round(span.offset * 1000),
   }));
+}
+
+/** 終端が無いときは、これまでの配列のまま。あるときだけ秒を添える。 */
+export function packWipeLine(spans: WipeSpan[] | null, end: number | null): unknown {
+  const packed = packWipe(spans);
+  if (end == null || !Number.isFinite(end)) return packed;
+  return { spans: packed, endMs: Math.round(end * 1000) };
+}
+
+export function unpackWipeLine(value: unknown, length: number): { spans: WipeSpan[] | null; end: number | null } {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    const row = value as { spans?: unknown; endMs?: unknown };
+    const endMs = Math.round(Number(row.endMs));
+    const end = Number.isFinite(endMs) && endMs >= 400 && endMs <= 30000 ? endMs / 1000 : null;
+    return { spans: unpackWipe(row.spans, length), end };
+  }
+  return { spans: unpackWipe(value, length), end: null };
 }
 
 export function unpackWipe(value: unknown, length: number): WipeSpan[] | null {

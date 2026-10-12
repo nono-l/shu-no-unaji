@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { CUES, DURATION, formatCueTime, zeroOffsets } from "../data/score.ts";
-import { offsetTrace, scoreStamp, syncFrame } from "./sync-log.ts";
+import { dragSpot, offsetTrace, scoreStamp, syncFrame } from "./sync-log.ts";
 
 describe("同期ログ", () => {
   it("譜面の時刻が分かると、公開版の譜面が特定できる", () => {
@@ -33,5 +33,18 @@ describe("同期ログ", () => {
     assert.match(line, /off=-0\.8/);
     assert.match(line, new RegExp(`heard=${formatCueTime(CUES[1].t - offsets[1]).replace(".", "\\.")}`));
     assert.match(line, /audio=227\.1/);
+  });
+
+  it("端へ寄せても、一部は画面に残る", () => {
+    const frame = { width: 390, height: 800 };
+    const size = { width: 120, height: 32 };
+    assert.deepEqual(dragSpot({ left: 10, top: 10 }, { x: -400, y: -400 }, size, frame), {
+      left: 36 - 120,
+      top: 8,
+    });
+    assert.deepEqual(dragSpot({ left: 10, top: 10 }, { x: 900, y: 900 }, size, frame), {
+      left: 390 - 36,
+      top: 800 - 36,
+    });
   });
 });

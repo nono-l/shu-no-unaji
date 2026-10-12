@@ -15,6 +15,7 @@ import {
   sectionLoop,
   sectionStart,
   seekWrite,
+  seekLanded,
   stepCue,
 } from "./film-seek.ts";
 
@@ -31,6 +32,13 @@ describe("シークとくり返し", () => {
     assert.equal(seekWrite(null, 1, false), "wait");
     assert.equal(seekWrite(12, 12.02, false), "done");
     assert.equal(seekWrite(12, 1, false), "write");
+  });
+
+  it("着地したあとだけ、止めた再生を戻す", () => {
+    assert.equal(seekLanded(null, false, true), true);
+    assert.equal(seekLanded(12, false, true), false);
+    assert.equal(seekLanded(null, true, true), false);
+    assert.equal(seekLanded(null, false, false), false);
   });
 
   it("場面の動画は、その場面の頭からの余り", () => {

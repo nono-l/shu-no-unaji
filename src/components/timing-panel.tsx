@@ -44,6 +44,7 @@ function shiftLabel(offset: number): string {
 }
 
 function stepText(step: number): string {
+  if (Math.abs(step) >= 1) return step > 0 ? `+${step}` : String(step);
   const text = Math.abs(step) < 0.1 ? step.toFixed(2) : step.toFixed(1);
   return step > 0 ? `+${text}` : text;
 }
@@ -137,7 +138,7 @@ export function TimingPanel({
       {cueIndex >= 0 ? <p className="timing-now">{CUES[cueIndex].text}</p> : null}
       <p className="timing-phrase">{phrase(offset, canNudge, locked)}</p>
       <div className="timing-nudge">
-        {[-0.5, -0.1, -0.01, 0.01, 0.1, 0.5].map((step) => (
+        {[-6, -0.5, -0.1, -0.01, 0.01, 0.1, 0.5, 6].map((step) => (
           <button
             key={step}
             type="button"
