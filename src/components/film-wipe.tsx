@@ -16,15 +16,16 @@ export function WipePick({
   onChange: (next: WipeSpan[] | null) => void;
 }) {
   const chars = Array.from(text);
+  const pickRef = useRef<HTMLParagraphElement>(null);
   const anchor = useRef<number | null>(null);
   const [from, setFrom] = useState(0);
-  const [to, setTo] = useState(0);
+  const [to, setTo] = useState(chars.length);
   const covered = covering(chars.length, spans);
 
   useEffect(() => {
     anchor.current = null;
     setFrom(0);
-    setTo(0);
+    setTo(Array.from(text).length);
   }, [text]);
 
   useEffect(() => {
@@ -46,10 +47,28 @@ export function WipePick({
   }
 
   function indexAt(clientX: number, clientY: number): number | null {
-    const node = document.elementFromPoint(clientX, clientY)?.closest<HTMLElement>("[data-wipe-i]");
-    if (!node) return null;
-    const index = Number(node.dataset.wipeI);
-    return Number.isInteger(index) ? index : null;
+    const root = pickRef.current;
+    if (!root) return null;
+    const direct = document.elementFromPoint(clientX, clientY)?.closest<HTMLElement>("[data-wipe-i]");
+    if (direct && root.contains(direct)) {
+      const index = Number(direct.dataset.wipeI);
+      if (Number.isInteger(index)) return index;
+    }
+    const box = root.getBoundingClientRect();
+    if (clientX < box.left - 12 || clientX > box.right + 12 || clientY < box.top - 12 || clientY > box.bottom + 12) {
+      return null;
+    }
+    let best: { index: number; dist: number } | null = null;
+    for (const span of root.querySelectorAll<HTMLElement>("[data-wipe-i]")) {
+      const rect = span.getBoundingClientRect();
+      const x = Math.min(Math.max(clientX, rect.left), rect.right);
+      const y = Math.min(Math.max(clientY, rect.top), rect.bottom);
+      const dist = (clientX - x) ** 2 + (clientY - y) ** 2;
+      const index = Number(span.dataset.wipeI);
+      if (!Number.isInteger(index)) continue;
+      if (!best || dist < best.dist) best = { index, dist };
+    }
+    return best?.index ?? null;
   }
 
   function edit(kind: WipeEdit) {
@@ -61,6 +80,7 @@ export function WipePick({
     <div className="wipe-edit" data-ui="">
       <p
         className="wipe-pick"
+        ref={pickRef}
         onPointerDown={(event) => {
           if (event.button !== 0) return;
           const index = indexAt(event.clientX, event.clientY);

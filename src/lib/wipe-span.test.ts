@@ -5,7 +5,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { CUES, lyricWipeAt, lyricWipeSpan, zeroOffsets } from "../data/score.ts";
-import { applyWipe, charProgress, isPlain, unpackWipe } from "./wipe-span.ts";
+import { applyWipe, charProgress, isPlain, unpackWipe, wipeLabel } from "./wipe-span.ts";
 
 describe("白い塗りの範囲", () => {
   it("何も無ければ、行の真ん中は半分白い", () => {
@@ -42,5 +42,10 @@ describe("白い塗りの範囲", () => {
     assert.equal(spans?.[0].offset, 0.05);
     assert.equal(spans?.[0].speed, 1.25);
     assert.equal(unpackWipe([], 4), null);
+  });
+
+  it("行を開いた直後は、その行全体を対象にする", () => {
+    assert.equal(wipeLabel(4, null, 0, 4), "この行 · 1倍 · 始まりはそのまま");
+    assert.equal(wipeLabel(4, null, 1, 3), "選んだ文字 · 1倍 · 始まりはそのまま");
   });
 });

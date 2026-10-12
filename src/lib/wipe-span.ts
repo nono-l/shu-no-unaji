@@ -142,12 +142,14 @@ export function unpackWipe(value: unknown, length: number): WipeSpan[] | null {
 }
 
 export function wipeLabel(length: number, spans: WipeSpan[] | null, from: number, to: number): string {
-  if (to <= from) return "文字を選んでから、速さと始まり";
+  if (to <= from) return "文字をなぞると、その部分だけ";
   const inside = covering(length, spans).filter((span) => span.to > from && span.from < to);
-  if (inside.length === 0) return "文字を選んでから、速さと始まり";
+  if (inside.length === 0) return "文字をなぞると、その部分だけ";
   const speed = inside[0].speed;
   const offset = inside[0].offset;
   if (inside.some((span) => span.speed !== speed || span.offset !== offset)) return "混ざった範囲";
   const shift = offset === 0 ? "始まりはそのまま" : offset > 0 ? `始まり ${offset.toFixed(2)}秒 早い` : `始まり ${Math.abs(offset).toFixed(2)}秒 遅い`;
-  return `${speed === 1 ? "1倍" : `${speed}倍`} · ${shift}`;
+  const rate = speed === 1 ? "1倍" : `${speed}倍`;
+  const scope = from === 0 && to === length ? "この行" : "選んだ文字";
+  return `${scope} · ${rate} · ${shift}`;
 }

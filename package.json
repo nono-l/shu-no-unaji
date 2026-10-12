@@ -16,7 +16,7 @@
     "preview:stop": "node scripts/preview.mjs stop",
     "typecheck": "tsc --noEmit",
     "check:auth": "node scripts/check-auth-invariant.mjs",
-    "test": "node --test 'scripts/**/*.test.mjs' && node --experimental-strip-types --test src/lib/app-data/app-data.test.ts src/lib/app-data/readiness-schedule.test.ts src/lib/auth/gate-identity.test.ts src/lib/auth/sign-in-gate.test.ts src/lib/preview-path-prefix.test.ts src/data/score.test.ts src/lib/line-memory.test.ts src/components/film-paint.test.ts src/components/film-audio.test.ts",
+    "test": "node --test 'scripts/**/*.test.mjs' && node --experimental-strip-types --test src/lib/app-data/app-data.test.ts src/lib/app-data/readiness-schedule.test.ts src/lib/auth/gate-identity.test.ts src/lib/auth/sign-in-gate.test.ts src/lib/preview-path-prefix.test.ts src/data/score.test.ts src/lib/line-memory.test.ts src/lib/sync-log.test.ts src/lib/check-bank.test.ts src/lib/check-run.test.ts src/components/film-paint.test.ts src/components/film-audio.test.ts",
     "lint": "npm --prefix tools/lint install --no-audit --no-fund --no-package-lock && npm --prefix tools/lint exec -- eslint -c tools/lint/eslint.config.mjs .",
     "format": "prettier --write ."
   },
@@ -47,7 +47,7 @@
     "@radix-ui/react-toggle-group": "^1.1.20",
     "@radix-ui/react-tooltip": "^1.3.0",
     "@tailwindcss/vite": "^4.3.3",
-    "@tanstack/react-query": "^5.104.1",
+    "@tanstack/react-query": "^5.104.2",
     "@tanstack/react-router": "^1.170.42",
     "@tanstack/react-start": "^1.168.61",
     "@tanstack/react-table": "^9.2.8",
@@ -77,7 +77,7 @@
     "typescript": "^7.0.2",
     "vaul": "^1.1.2",
     "vite": "^8.3.4",
-    "zod": "^4.6.5",
+    "zod": "^4.6.6",
     "zustand": "^5.0.15"
   },
   "devDependencies": {

@@ -26,6 +26,8 @@ import {
   zeroOffsets,
 } from "@/data/score";
 import { createLineMemory } from "@/lib/line-memory";
+import { pushSync, scoreStamp, syncFrame } from "@/lib/sync-log";
+import { SyncLogPanel } from "@/components/sync-log-panel";
 import type { WipeSpan } from "@/lib/wipe-span";
 import { createResumeClock, readResume } from "@/lib/resume-at";
 import { paintFilmFrame, type FilmLoop } from "@/components/film-paint";
@@ -34,6 +36,7 @@ import { bindMediaSession, sessionMetadata, sessionPosition } from "@/components
 import { resumeVideo, syncSceneVideo } from "@/components/film-video";
 import {
   clampSeek,
+  seekWrite,
   lineLoop,
   loopAfterLine,
   loopAfterSection,
@@ -74,6 +77,11 @@ export function FilmPlayer() {
   const loopRef = useRef<FilmLoop | null>(null);
   const remainRef = useRef(false);
   const swiped = useRef(false);
+  const syncMark = useRef(0);
+  const seekWant = useRef<number | null>(null);
+  const seekBusy = useRef(false);
+  const seekResume = useRef(false);
+  const flushSeekRef = useRef<() => void>(() => {});
   const resumeRef = useRef<ReturnType<typeof createResumeClock> | null>(null);
   const paintRef = useRef<(t: number) => void>(() => {});
   const toggleRef = useRef<() => void>(() => {});
@@ -144,6 +152,7 @@ export function FilmPlayer() {
         setLocks(next);
       },
       adjusted: (next) => setAdjusted(next),
+      trace: (line) => pushSync(line),
     });
   }
   const memory = memoryRef.current;
@@ -187,6 +196,7 @@ export function FilmPlayer() {
       publishSession(audio);
     },
     onPause: (audio) => {
+      if (seekBusy.current) return;
       const next = playbackEvent("pause", audio.ended);
       setPlaying(next.playing);
       if (next.saveResume) resumeClock.pause(audio.currentTime);
@@ -204,6 +214,29 @@ export function FilmPlayer() {
     },
     onElement: (audio) => {
       audioRef.current = audio;
+      if (!audio) return;
+      audio.addEventListener("seeked", () => {
+        seekBusy.current = false;
+        const want = seekWant.current;
+        pushSync(`seeked at=${audio.currentTime.toFixed(2)} want=${want == null ? "-" : want.toFixed(2)}`);
+        if (want != null && Math.abs(audio.currentTime - want) < 0.15) seekWant.current = null;
+        flushSeekRef.current();
+      });
+      const logAudio = () => {
+        const duration = Number.isFinite(audio.duration) ? audio.duration : null;
+        pushSync(
+          syncFrame({
+            time: audio.currentTime,
+            duration,
+            rate: audio.playbackRate,
+            ready: audio.readyState,
+            index: -1,
+            offsets: offsetsRef.current,
+          }).replace("cue=-", `src=${audio.currentSrc || audio.src}`),
+        );
+      };
+      audio.addEventListener("loadedmetadata", logAudio);
+      audio.addEventListener("durationchange", logAudio);
     },
   };
 
@@ -257,6 +290,20 @@ export function FilmPlayer() {
       cueRef.current = frame.heard;
       setCueIndex(frame.heard);
     }
+    if (audio && !audio.paused && (frame.heardChanged || performance.now() - syncMark.current > 2000)) {
+      syncMark.current = performance.now();
+      const duration = Number.isFinite(audio.duration) ? audio.duration : null;
+      pushSync(
+        syncFrame({
+          time: frame.time,
+          duration,
+          rate: audio.playbackRate,
+          ready: audio.readyState,
+          index: frame.heard,
+          offsets: offsetsRef.current,
+        }),
+      );
+    }
     if (audio && !audio.paused) resumeClock.tick(performance.now(), frame.time);
   };
 
@@ -266,16 +313,59 @@ export function FilmPlayer() {
     setLoopMode(null);
   }
 
+  function flushSeek() {
+    const audio = audioRef.current;
+    if (!audio) return;
+    const decision = seekWrite(seekWant.current, audio.currentTime, seekBusy.current);
+    if (decision === "wait") return;
+    if (decision === "done") {
+      seekWant.current = null;
+      if (seekResume.current) {
+        seekResume.current = false;
+        void playIfPaused({
+          paused: () => audio.paused,
+          play: () => {
+            deck.ensureGraph();
+            return audio.play();
+          },
+          onLive: () => {
+            setPhase("live");
+            resumeVideos();
+          },
+        });
+      }
+      return;
+    }
+    const want = seekWant.current as number;
+    seekBusy.current = true;
+    if (!audio.paused) {
+      seekResume.current = true;
+      audio.pause();
+    }
+    pushSync(`seek ${audio.currentTime.toFixed(2)} → ${want.toFixed(2)}`);
+    try {
+      audio.currentTime = want;
+    } catch {
+      seekBusy.current = false;
+    }
+  }
+  flushSeekRef.current = flushSeek;
+
+  function previewSeek(time: number) {
+    const at = clampSeek(time);
+    seekWant.current = at;
+    if (rangeRef.current) rangeRef.current.style.setProperty("--pct", `${(at / DURATION) * 100}%`);
+    paintRef.current(at);
+  }
+
   function seek(time: number, andPlay = false) {
     const audio = audioRef.current;
     if (!audio) return;
-    const at = clampSeek(time);
-    audio.currentTime = at;
-    if (rangeRef.current) rangeRef.current.style.setProperty("--pct", `${(at / DURATION) * 100}%`);
-    paintRef.current(at);
+    previewSeek(time);
+    if (andPlay) seekResume.current = true;
     const video = document.querySelector(".frame-on video");
     if (video instanceof HTMLVideoElement) {
-      const into = sceneVideoInto(at, video.duration);
+      const into = sceneVideoInto(seekWant.current ?? 0, video.duration);
       if (into != null) {
         try {
           video.currentTime = into;
@@ -285,19 +375,7 @@ export function FilmPlayer() {
       }
     }
     publishSession(audio);
-    if (andPlay) {
-      void playIfPaused({
-        paused: () => audio.paused,
-        play: () => {
-          deck.ensureGraph();
-          return audio.play();
-        },
-        onLive: () => {
-          setPhase("live");
-          resumeVideos();
-        },
-      });
-    }
+    flushSeek();
   }
   seekRef.current = (time) => seek(time);
 
@@ -461,6 +539,7 @@ export function FilmPlayer() {
   }, [timing, timeline, deck]);
 
   useEffect(() => {
+    pushSync(scoreStamp());
     const stop = memory.start();
     try {
       if (localStorage.getItem(KARAOKE_KEY) === "1") {
@@ -477,7 +556,7 @@ export function FilmPlayer() {
     let frame = 0;
     const tick = () => {
       const audio = audioRef.current;
-      if (audio) paintRef.current(audio.currentTime);
+      if (audio && !scrubbing.current) paintRef.current(seekWant.current ?? audio.currentTime);
       frame = requestAnimationFrame(tick);
     };
     frame = requestAnimationFrame(tick);
@@ -586,6 +665,7 @@ export function FilmPlayer() {
         toggleRef.current();
       }}
     >
+      <SyncLogPanel />
       <FilmTitle section={section} onSection={() => goSection(cueIndex >= 0 ? cueIndex : 0)} />
       <div ref={audioHostRef} className="bg-audio" />
       <FilmStage
@@ -684,9 +764,14 @@ export function FilmPlayer() {
           scrubbing.current = true;
         }}
         onScrubEnd={() => {
+          const at = Number(rangeRef.current?.value ?? seekWant.current ?? 0);
           scrubbing.current = false;
+          seek(at);
         }}
-        onSeek={(time) => seek(time)}
+        onSeek={(time) => {
+          if (scrubbing.current) previewSeek(time);
+          else seek(time);
+        }}
         onToggle={() => toggleRef.current()}
         onRemain={() => {
           remainRef.current = !remainRef.current;

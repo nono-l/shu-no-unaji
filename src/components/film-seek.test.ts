@@ -14,6 +14,7 @@ import {
   sceneVideoInto,
   sectionLoop,
   sectionStart,
+  seekWrite,
   stepCue,
 } from "./film-seek.ts";
 
@@ -23,6 +24,13 @@ describe("シークとくり返し", () => {
     assert.equal(clampSeek(-4), 0);
     assert.equal(clampSeek(DURATION + 3), DURATION);
     assert.equal(clampSeek(10.5), 10.5);
+  });
+
+  it("移動中は次を書かず、着いたら終える", () => {
+    assert.equal(seekWrite(12, 1, true), "wait");
+    assert.equal(seekWrite(null, 1, false), "wait");
+    assert.equal(seekWrite(12, 12.02, false), "done");
+    assert.equal(seekWrite(12, 1, false), "write");
   });
 
   it("場面の動画は、その場面の頭からの余り", () => {

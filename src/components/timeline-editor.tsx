@@ -5,7 +5,7 @@
 */
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type RefObject } from "react";
 import { Pause, Play } from "lucide-react";
-import { CUES, DURATION, cueHeardAt, clampOffset } from "@/data/score";
+import { CUES, DURATION, cueHeardAt, cueSheet, clampOffset } from "@/data/score";
 import { SpeedPick, WhenLine, offsetDigits } from "@/components/film-speed";
 
 const PAD = 28;
@@ -76,6 +76,7 @@ export function TimelineEditor({
   const [zoom, setZoom] = useState(ZOOMS[1]);
   const [draft, setDraft] = useState<{ index: number; offset: number } | null>(null);
   const [wave, setWave] = useState<Float32Array | null>(null);
+  const [copied, setCopied] = useState(false);
 
   zoomRef.current = zoom;
   followRef.current = follow;
@@ -133,6 +134,23 @@ export function TimelineEditor({
   const activeCue = active >= 0 ? CUES[active] : null;
   const locked = active >= 0 && locks[active] === true;
   const width = PAD + DURATION * zoom;
+  const dirty = shown.some((offset) => Math.abs(offset) >= 0.0005);
+
+  function copySheet() {
+    const text = cueSheet(shown);
+    const done = () => {
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    };
+    const clipboard = navigator.clipboard;
+    if (!clipboard) {
+      window.prompt("これをコピーして貼ってください", text);
+      return;
+    }
+    void clipboard.writeText(text).then(done, () => {
+      window.prompt("これをコピーして貼ってください", text);
+    });
+  }
   const step = zoom >= 800 ? 0.1 : zoom >= 360 ? 0.5 : zoom >= 48 ? 1 : zoom >= 24 ? 5 : 10;
 
   function place(time: number, center: boolean) {
@@ -391,6 +409,9 @@ export function TimelineEditor({
         </button>
         <button type="button" className={follow ? "text-btn tl-follow" : "text-btn"} onClick={jumpToNow}>
           今へ
+        </button>
+        <button type="button" className="text-btn" onClick={copySheet} disabled={!dirty}>
+          {copied ? "コピーした" : "書き出す"}
         </button>
       </div>
       <div ref={scrollRef} className="tl-scroll" onScroll={onScroll}>

@@ -5,6 +5,7 @@
 */
 import { CUES, clampOffset, zeroLocks, zeroOffsets } from "../data/score.ts";
 import { packWipe, unpackWipe, type WipeSpan, type WipeStored } from "./wipe-span.ts";
+import { offsetTrace } from "./sync-log.ts";
 
 const OFFSET_KEY = "shu-line-offsets";
 const LOCK_KEY = "shu-line-locks";
@@ -27,6 +28,7 @@ type Listen = {
   locks: (next: boolean[]) => void;
   adjusted?: (next: number[]) => void;
   wipes?: (next: (WipeSpan[] | null)[]) => void;
+  trace?: (line: string) => void;
 };
 
 type Io = {
@@ -257,10 +259,14 @@ export function createLineMemory(listen: Listen, io?: Io) {
     publishLocks(readStoredLocks());
     publishAdjusted(adjusted.slice());
     publishWipes(wipes.map((spans) => (spans ? spans.map((span) => ({ ...span })) : null)));
+    listen.trace?.(offsetTrace("local", offsets));
     let gone = false;
     void (io ? io.load() : remoteLoad())
       .then((result) => {
-        if (gone || localDirty) return;
+        if (gone || localDirty) {
+          listen.trace?.("offsets remote skipped");
+          return;
+        }
         const nextOffsets = offsets.slice();
         const nextLocks = locks.slice();
         const nextAdjusted = adjusted.slice();
@@ -291,12 +297,14 @@ export function createLineMemory(listen: Listen, io?: Io) {
         if (locksChanged) publishLocks(nextLocks);
         if (adjustedChanged) publishAdjusted(nextAdjusted);
         if (wipesChanged) publishWipes(nextWipes);
+        listen.trace?.(offsetTrace("remote", nextOffsets, result.lines.length));
         listen.note(
           result.lines.length > 0 ? "行ごとのずれを戻しました" : "行を選ぶと、その行だけ動きます",
           result.lines.length > 0 ? "ok" : "muted",
         );
       })
       .catch(() => {
+        listen.trace?.("offsets remote failed");
         if (!gone) listen.note("保存先に届かず、この画面の記憶です", "bad");
       });
     return () => {

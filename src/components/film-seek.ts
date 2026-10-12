@@ -5,6 +5,12 @@
 import { CUES, DURATION, SCENES, cueHeardAt, sceneIndexAt, sectionBounds } from "../data/score.ts";
 import type { FilmLoop } from "./film-paint.ts";
 
+export function seekWrite(want: number | null, at: number, busy: boolean): "wait" | "done" | "write" {
+  if (want == null || busy) return "wait";
+  if (!Number.isFinite(at) || Math.abs(at - want) < 0.08) return "done";
+  return "write";
+}
+
 export function clampSeek(time: number): number {
   if (!Number.isFinite(time)) return 0;
   return Math.min(DURATION, Math.max(0, time));

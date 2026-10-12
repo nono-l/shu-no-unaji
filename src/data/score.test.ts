@@ -4,7 +4,7 @@
 */
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { CUES, SCENES, clampOffset, cueHeardAt, cueIndexAt, lyricWipeAt, sceneIndexAt } from "./score.ts";
+import { CUES, SCENES, clampOffset, cueHeardAt, cueIndexAt, cueSheet, formatCueTime, lyricWipeAt, sceneIndexAt } from "./score.ts";
 
 function near(actual: number, expected: number) {
   assert.ok(Math.abs(actual - expected) < 1e-9, `${actual} は ${expected} ではない`);
@@ -71,5 +71,22 @@ describe("白塗り", () => {
     const offsets = Array.from({ length: CUES.length }, () => 0);
     const last = CUES.length - 1;
     assert.equal(lyricWipeAt(last, CUES[last].t + 1.6, offsets), 0.5);
+  });
+});
+
+describe("書き出し", () => {
+  it("ずれた行だけ、出だしの秒で書く", () => {
+    const offsets = Array.from({ length: CUES.length }, () => 0);
+    offsets[0] = 0.5;
+    offsets[2] = -0.01;
+    assert.equal(
+      cueSheet(offsets),
+      [
+        "# shu-cues",
+        `0\t${formatCueTime(cueHeardAt(0, offsets))}\t${CUES[0].section}\t${CUES[0].text}`,
+        `2\t${formatCueTime(cueHeardAt(2, offsets))}\t${CUES[2].section}\t${CUES[2].text}`,
+        "",
+      ].join("\n"),
+    );
   });
 });

@@ -44,27 +44,27 @@ export const SCENES: Scene[] = [
 
 export const CUES: Cue[] = [
   { t: 16.2, section: "一番", text: "畳の上で 指でなぞる輪" },
-  { t: 19.8, section: "一番", text: "ほどける帯が また結び直す" },
-  { t: 23.6, section: "一番", text: "朱のうなじに 月が落ちてる" },
-  { t: 28.2, section: "一番", text: "笑ったままの 秘密が揺れる" },
-  { t: 33.2, section: "一番", text: "あの花魁をゴールさせないために" },
-  { t: 38.6, section: "一番", text: "武器を振り上げろ" },
+  { t: 20.6, section: "一番", text: "ほどける帯が また結び直す" },
+  { t: 25.4, section: "一番", text: "朱のうなじに 月が落ちてる" },
+  { t: 29.7, section: "一番", text: "笑ったままの 秘密が揺れる" },
+  { t: 34.6, section: "一番", text: "あの花魁をゴールさせないために" },
+  { t: 39.4, section: "一番", text: "武器を振り上げろ" },
 
-  { t: 44.2, section: "足音", text: "息をひそめて" },
-  { t: 46.4, section: "足音", text: "足音を消して" },
-  { t: 48.6, section: "足音", text: "その背中まで" },
-  { t: 50.8, section: "足音", text: "あと少しだろ" },
-  { t: 53, section: "足音", text: "指先ひとつで" },
+  { t: 44.7, section: "足音", text: "息をひそめて" },
+  { t: 46.2, section: "足音", text: "足音を消して" },
+  { t: 48.5, section: "足音", text: "その背中まで" },
+  { t: 51.2, section: "足音", text: "あと少しだろ" },
+  { t: 54.1, section: "足音", text: "指先ひとつで" },
   { t: 56, section: "足音", text: "運命を裂いて" },
-  { t: 59.2, section: "足音", text: "今夜だけはまだ" },
-  { t: 62.6, section: "足音", text: "終わらせない" },
+  { t: 58.3, section: "足音", text: "今夜だけはまだ" },
+  { t: 60.9, section: "足音", text: "終わらせない" },
 
-  { t: 65.5, section: "サビ", text: "まだ行かせない" },
-  { t: 66.8, section: "サビ", text: "まだ行かせない" },
-  { t: 68.2, section: "サビ", text: "朱のうなじが燃えてる" },
-  { t: 70, section: "サビ", text: "まだ行かせない" },
-  { t: 71.4, section: "サビ", text: "まだ行かせない" },
-  { t: 72.9, section: "サビ", text: "この手で闇を止める" },
+  { t: 63, section: "サビ", text: "まだ行かせない" },
+  { t: 64.1, section: "サビ", text: "まだ行かせない" },
+  { t: 65.4, section: "サビ", text: "朱のうなじが燃えてる" },
+  { t: 67.8, section: "サビ", text: "まだ行かせない" },
+  { t: 69.1, section: "サビ", text: "まだ行かせない" },
+  { t: 70.1, section: "サビ", text: "この手で闇を止める" },
 
   { t: 84, section: "二番", text: "鏡の前で 目を伏せたまま" },
   { t: 87.6, section: "二番", text: "紅を引いたら 嘘も深くなる" },
@@ -113,6 +113,22 @@ export const CUES: Cue[] = [
   { t: 200.6, section: "最後", text: "まだ行かせない" },
   { t: 202.4, section: "最後", text: "あの花魁には渡さない" },
 ];
+
+export function formatCueTime(seconds: number): string {
+  const rounded = Math.round(seconds * 1000) / 1000;
+  return rounded.toFixed(3).replace(/0+$/, "").replace(/\.$/, "");
+}
+
+/** ずれた行だけ。時刻は出だしそのもの。index は CUES の並び。 */
+export function cueSheet(offsets: number[]): string {
+  const lines = ["# shu-cues"];
+  for (let index = 0; index < CUES.length; index++) {
+    if (Math.abs(offsets[index] ?? 0) < 0.0005) continue;
+    const cue = CUES[index];
+    lines.push([index, formatCueTime(cueHeardAt(index, offsets)), cue.section, cue.text].join("\t"));
+  }
+  return `${lines.join("\n")}\n`;
+}
 
 export function sceneSpan(index: number): number {
   const start = SCENES[index]?.t ?? 0;
