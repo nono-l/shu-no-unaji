@@ -4,7 +4,7 @@
 */
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { playIfPaused, playbackEvent, togglePlayback, type FilmPhase } from "./film-play.ts";
+import { playIfPaused, playbackEvent, playbackOrigin, catchResume, playAt, togglePlayback, type FilmPhase } from "./film-play.ts";
 
 function deferred() {
   let resolve: () => void = () => {};
@@ -133,5 +133,57 @@ describe("再生", () => {
     assert.equal(ended.playing, false);
     assert.equal(ended.phase, "ended");
     assert.equal(ended.clearResume, true);
+  });
+
+  it("続きからはその時刻。終わりは頭。途中はシークしない", () => {
+    assert.equal(playbackOrigin("gate", false, 40.5), 40.5);
+    assert.equal(playbackOrigin("gate", false, null), null);
+    assert.equal(playbackOrigin("ended", false, 40.5), 0);
+    assert.equal(playbackOrigin("gate", true, 40.5), 0);
+    assert.equal(playbackOrigin("live", false, 40.5), null);
+  });
+
+  it("再生が頭に戻したら、続きの時刻へ戻す", () => {
+    assert.equal(catchResume(40.5, 0), 40.5);
+    assert.equal(catchResume(40.5, 40.6), null);
+    assert.equal(catchResume(null, 0), null);
+  });
+
+  it("途中からは、シークを待たずに鳴らしてから時刻を置く", async () => {
+    const order: string[] = [];
+    let at = 0;
+    await playAt({
+      at: 110.8,
+      play: async () => {
+        order.push("play");
+        at = 0;
+      },
+      place: (time) => {
+        order.push(`place:${time}`);
+        at = time;
+      },
+      read: () => at,
+    });
+    assert.deepEqual(order, ["play", "place:110.8"]);
+    assert.equal(at, 110.8);
+  });
+
+  it("鳴らし始めが頭に戻したら、もう一度置く", async () => {
+    let at = 0;
+    let places = 0;
+    await playAt({
+      at: 110.8,
+      play: async () => {
+        at = 0;
+      },
+      place: (time) => {
+        places += 1;
+        if (places === 1) return;
+        at = time;
+      },
+      read: () => at,
+    });
+    assert.equal(places, 2);
+    assert.equal(at, 110.8);
   });
 });

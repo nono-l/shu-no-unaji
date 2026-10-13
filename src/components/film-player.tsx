@@ -11,7 +11,7 @@
   キーの意味は film-keys。入力欄では何もしない。
   共有リンクは film-share。開くのはここ。行のずれは載せない。
   画面を消さないのは film-wake。再生中だけ。
-  再生の切り替えは film-play。終わりからは頭に戻す。音を鳴らすのはここ。
+  再生の切り替えは film-play。終わりは頭から、続きからはその時刻。音を鳴らすのはここ。
   ロック画面は film-session。再生そのものはここ。
   動画の頭は film-video。音に合わせ、音は消す。
 */
@@ -32,9 +32,9 @@ import { SyncLogPanel } from "@/components/sync-log-panel";
 import type { WipeSpan } from "@/lib/wipe-span";
 import { createResumeClock, readResume } from "@/lib/resume-at";
 import { paintFilmFrame, type FilmLoop } from "@/components/film-paint";
-import { playIfPaused, playbackEvent, togglePlayback, type FilmPhase } from "@/components/film-play";
+import { playIfPaused, playbackEvent, playbackOrigin, catchResume, playAt, togglePlayback, type FilmPhase } from "@/components/film-play";
 import { bindMediaSession, sessionMetadata, sessionPosition } from "@/components/film-session";
-import { resumeVideo, syncSceneVideo } from "@/components/film-video";
+import { resumeVideo, syncSceneVideo, videoClock } from "@/components/film-video";
 import {
   clampSeek,
   seekLanded,
@@ -84,7 +84,9 @@ export function FilmPlayer() {
   const seekWant = useRef<number | null>(null);
   const seekBusy = useRef(false);
   const seekResume = useRef(false);
+  const seekFrom = useRef<number | null>(null);
   const flushSeekRef = useRef<() => void>(() => {});
+  const placeVideoRef = useRef<(at: number) => void>(() => {});
   const resumeRef = useRef<ReturnType<typeof createResumeClock> | null>(null);
   const paintRef = useRef<(t: number) => void>(() => {});
   const toggleRef = useRef<() => void>(() => {});
@@ -219,7 +221,9 @@ export function FilmPlayer() {
     },
     onTick: (audio) => {
       publishSession(audio);
-      if (document.visibilityState !== "visible") paintRef.current(audio.currentTime);
+      if (document.visibilityState !== "visible") {
+        paintRef.current(seekFrom.current ?? seekWant.current ?? audio.currentTime);
+      }
     },
     onElement: (audio) => {
       audioRef.current = audio;
@@ -228,7 +232,11 @@ export function FilmPlayer() {
         seekBusy.current = false;
         const want = seekWant.current;
         pushSync(`seeked at=${audio.currentTime.toFixed(2)} want=${want == null ? "-" : want.toFixed(2)}`);
-        if (want != null && Math.abs(audio.currentTime - want) < 0.15) seekWant.current = null;
+        if (want != null && Math.abs(audio.currentTime - want) < 0.15 && seekFrom.current == null) {
+          seekWant.current = null;
+        }
+        placeVideoRef.current(seekFrom.current ?? seekWant.current ?? audio.currentTime);
+        if (seekFrom.current != null && !seekResume.current) return;
         flushSeekRef.current();
       });
       const logAudio = () => {
@@ -333,27 +341,49 @@ export function FilmPlayer() {
       if (!seekLanded(seekWant.current, seekBusy.current, seekResume.current)) return;
     }
     if (decision === "wait" || decision === "done") {
-      seekWant.current = null;
-      if (seekResume.current) {
-        seekResume.current = false;
-        void playIfPaused({
-          paused: () => audio.paused,
-          play: () => {
-            deck.ensureGraph();
-            return audio.play();
-          },
-          onLive: () => {
-            setPhase("live");
-            resumeVideos();
-          },
-        });
+      const landed = seekFrom.current ?? seekWant.current;
+      if (!seekResume.current) {
+        seekWant.current = null;
+        return;
       }
+      seekResume.current = false;
+      seekFrom.current = null;
+      void playIfPaused({
+        paused: () => audio.paused,
+        play: async () => {
+          deck.ensureGraph();
+          if (landed != null) {
+            try {
+              audio.currentTime = landed;
+            } catch {
+              /* まだ長さが無い */
+            }
+          }
+          await audio.play();
+          const again = catchResume(landed, audio.currentTime);
+          if (again != null) {
+            try {
+              audio.currentTime = again;
+            } catch {
+              /* 再生が頭に戻した */
+            }
+          } else {
+            seekWant.current = null;
+          }
+          placeVideoRef.current(again ?? landed ?? audio.currentTime);
+        },
+        onLive: () => {
+          setPhase("live");
+          resumeVideos();
+        },
+      });
       return;
     }
     const want = seekWant.current as number;
     seekBusy.current = true;
     if (!audio.paused) {
       seekResume.current = true;
+      seekFrom.current = want;
       audio.pause();
     }
     pushSync(`seek ${audio.currentTime.toFixed(2)} → ${want.toFixed(2)}`);
@@ -376,22 +406,63 @@ export function FilmPlayer() {
     const audio = audioRef.current;
     if (!audio) return;
     previewSeek(time);
-    if (andPlay) seekResume.current = true;
-    const video = document.querySelector(".frame-on video");
-    if (video instanceof HTMLVideoElement) {
-      const into = sceneVideoInto(seekWant.current ?? 0, video.duration);
-      if (into != null) {
-        try {
-          video.currentTime = into;
-        } catch {
-          /* ignore */
+    placeVideoRef.current(seekWant.current ?? 0);
+    if (andPlay && audio.paused) {
+      const at = seekWant.current ?? time;
+      seekFrom.current = at;
+      seekResume.current = false;
+      void playAt({
+        at,
+        play: () => {
+          deck.ensureGraph();
+          return audio.play();
+        },
+        place: (next) => {
+          try {
+            audio.currentTime = next;
+          } catch {
+            /* まだ長さが無い */
+          }
+          placeVideoRef.current(next);
+        },
+        read: () => audio.currentTime,
+        whenPlaying: (fix) => {
+          audio.addEventListener("playing", fix, { once: true });
+        },
+      }).then(() => {
+        if (catchResume(at, audio.currentTime) == null) {
+          seekWant.current = null;
+          seekFrom.current = null;
         }
-      }
+        setPhase("live");
+        setPlaying(true);
+        resumeVideos();
+      }).catch(() => {
+        seekFrom.current = null;
+        setPhase("gate");
+      });
+      return;
+    }
+    if (andPlay) {
+      seekResume.current = true;
+      seekFrom.current = seekWant.current;
     }
     publishSession(audio);
     flushSeek();
   }
   seekRef.current = (time) => seek(time);
+
+  placeVideoRef.current = (at: number) => {
+    const video = document.querySelector(".frame-on video");
+    if (!(video instanceof HTMLVideoElement)) return;
+    const into = sceneVideoInto(at, video.duration);
+    if (into == null) return;
+    try {
+      video.currentTime = into;
+    } catch {
+      /* まだ長さが無い */
+    }
+  };
 
   function resumeVideos() {
     document.querySelectorAll("video").forEach((node) => {
@@ -403,7 +474,7 @@ export function FilmPlayer() {
     const audio = audioRef.current;
     syncSceneVideo(video, {
       sceneStart,
-      audioTime: audio ? audio.currentTime : null,
+      audioTime: videoClock(seekFrom.current ?? seekWant.current, audio ? audio.currentTime : null),
       audioPlaying: audio != null && !audio.paused,
     });
   }
@@ -542,6 +613,16 @@ export function FilmPlayer() {
   toggleRef.current = () => {
     const audio = audioRef.current;
     if (!audio) return;
+    const origin = playbackOrigin(
+      phase,
+      audio.ended,
+      resumeAt ?? readResume(window.location.search),
+    );
+    if (origin != null && origin > 0) {
+      seekBusy.current = false;
+      seek(origin, true);
+      return;
+    }
     void togglePlayback({
       ended: audio.ended,
       phase,
@@ -583,7 +664,9 @@ export function FilmPlayer() {
     let frame = 0;
     const tick = () => {
       const audio = audioRef.current;
-      if (audio && !scrubbing.current) paintRef.current(seekWant.current ?? audio.currentTime);
+      if (audio && !scrubbing.current) {
+        paintRef.current(seekFrom.current ?? seekWant.current ?? audio.currentTime);
+      }
       frame = requestAnimationFrame(tick);
     };
     frame = requestAnimationFrame(tick);
@@ -625,18 +708,13 @@ export function FilmPlayer() {
     const at = readResume(window.location.search);
     if (at == null) return;
     setResumeAt(at);
-    const audio = audioRef.current;
-    const place = () => {
-      if (!audio) return;
-      audio.currentTime = at as number;
-      paintRef.current(at as number);
-    };
-    if (audio && audio.readyState >= 1) place();
-    else audio?.addEventListener("loadedmetadata", place, { once: true });
+    previewSeek(at);
   }, []);
 
   useEffect(() => {
     if (!playing) return;
+    const at = seekFrom.current ?? seekWant.current ?? audioRef.current?.currentTime;
+    if (at != null) placeVideoRef.current(at);
     resumeVideos();
   }, [sceneIndex, playing]);
 

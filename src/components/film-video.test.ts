@@ -3,7 +3,7 @@
 */
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { resumeVideo, syncSceneVideo } from "./film-video.ts";
+import { resumeVideo, syncSceneVideo, videoClock } from "./film-video.ts";
 
 function fake(over: { duration?: number; ready?: number } = {}) {
   const calls: string[] = [];
@@ -67,5 +67,11 @@ describe("動画の同期", () => {
         throw new Error("no");
       },
     });
+  });
+
+  it("続きの時刻が残っていれば、まだ頭の音より先に使う", () => {
+    assert.equal(videoClock(40.5, 0), 40.5);
+    assert.equal(videoClock(null, 0), 0);
+    assert.equal(videoClock(null, null), null);
   });
 });
